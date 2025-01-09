@@ -66,7 +66,7 @@ func (pt *PieceTable) init(text []byte) {
 		byteLength: len(text),
 	}
 
-	pt.pieces.InsertBeforeTail(piece)
+	pt.pieces.Append(piece)
 	pt.seqLength = piece.length
 	pt.seqBytes = piece.byteLength
 	// pt.seqIndex = runeOffIndex{src: pt}
@@ -159,11 +159,11 @@ func (pt *PieceTable) insertAtBoundary(runeIndex int, text string, oldPiece *pie
 	pt.lastInsertPiece = newPiece
 
 	// insertion is at the boundary of 2 pieces.
-	oldPieces := newUndoPieceRange(pt.seqLength, pt.seqBytes, runeIndex)
+	oldPieces := &pieceRange{}
 	oldPieces.AsBoundary(oldPiece)
 	pt.undoStack.push(oldPieces)
 
-	newPieces := newPieceRange()
+	newPieces := &pieceRange{}
 	newPieces.Append(newPiece)
 	// swap link the new piece into the sequence
 	oldPieces.Swap(newPieces)
@@ -185,12 +185,12 @@ func (pt *PieceTable) insertInMiddle(runeIndex int, text string, oldPiece *piece
 	pt.lastInsertPiece = newPiece
 
 	// preserve the old pieces as a pieceRange, and push to the undo stack.
-	oldPieces := newUndoPieceRange(pt.seqLength, pt.seqBytes, runeIndex)
+	oldPieces := &pieceRange{}
 	oldPieces.Append(oldPiece)
 	pt.undoStack.push(oldPieces)
 
 	// spilt the old piece into 2 new pieces, and insert the newly added text.
-	newPieces := newPieceRange()
+	newPieces := &pieceRange{}
 
 	// Append the left part of the old piece.
 	byteLen := pt.getBuf(oldPiece.source).bytesForRange(oldPiece.offset, inRuneOff)
@@ -229,22 +229,84 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) bool
 
 	// remove the next event from the source stack
 	rng := src.pop()
-	// add event onto the destination stack
+	newRuneLen, newBytes := rng.Length()
+
+	// restore to the old piece range.
+	rng.Restore()
+	// add the restored range onto the destination stack
 	dest.push(rng)
 
-	// do the actual work
-	pt.restorePieceRange(rng)
+	lastRuneLen, lastBytes := rng.Length()
+	pt.seqLength += newRuneLen - lastRuneLen
+	pt.seqBytes += newBytes - lastBytes
+
 	return true
 }
 
-func (pt *PieceTable) restorePieceRange(rng *pieceRange) {
-	rng.Restore()
-	pt.seqLength = rng.seqLength
-	pt.seqBytes = rng.seqBytes
-}
+func (pt *PieceTable) Erase(startOff, endOff int) bool {
+	if startOff >= endOff || startOff >= pt.seqLength || endOff >= pt.seqLength || endOff-startOff > pt.seqLength {
+		return false
+	}
 
-func (pt *PieceTable) Erase() {
+	pt.redoStack.clear()
 
+	startPiece, inRuneOff := pt.pieces.FindPiece(startOff)
+
+	oldPieces := &pieceRange{}
+	oldPieces.Append(startPiece)
+
+	newPieces := &pieceRange{}
+	bytesErased := 0
+
+	// Delete start in the middle of a piece. Split the piece and keep the left part.
+	if inRuneOff > 0 {
+		// keep the left part of the start piece.
+		byteLen := pt.getBuf(startPiece.source).bytesForRange(startPiece.offset, inRuneOff)
+		newPieces.Append(&piece{
+			source:     startPiece.source,
+			offset:     startPiece.offset,
+			length:     inRuneOff,
+			byteOff:    startPiece.byteOff,
+			byteLength: byteLen,
+		})
+		bytesErased += startPiece.byteLength - byteLen
+	}
+
+	offset := startOff
+	for n := startPiece.next; n != pt.pieces.tail; n = n.next {
+		if offset < endOff && offset+n.length > endOff {
+			// Found the last affected piece, and the delete stops in the middle of it.
+			// Keep the right part of the end piece.
+			byteLen := pt.getBuf(n.source).bytesForRange(n.offset+endOff-offset, n.length-(endOff-offset))
+			byteOff := pt.getBuf(n.source).RuneOffset(n.offset + endOff - offset)
+
+			newPieces.Append(&piece{
+				source:     n.source,
+				offset:     n.offset + endOff - offset,
+				length:     n.length - (endOff - offset),
+				byteOff:    byteOff,
+				byteLength: byteLen,
+			})
+			bytesErased += n.byteLength - byteLen
+		} else {
+			bytesErased += n.byteLength
+		}
+
+		// push pieces in the middle and the end piece to undo stack.
+		oldPieces.Append(n)
+		offset += n.length
+		if offset >= endOff {
+			break
+		}
+	}
+
+	// swap link the new piece into the sequence
+	oldPieces.Swap(newPieces)
+	pt.seqLength -= endOff - startOff
+	pt.seqBytes -= bytesErased
+
+	//pt.recordAction(actionInsert, runeIndex+textRunes)
+	return true
 }
 
 func (pt *PieceTable) Replace() {

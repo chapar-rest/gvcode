@@ -4,26 +4,26 @@ import (
 	"testing"
 )
 
+func readTableContent(pt *PieceTable) string {
+	reader := PieceTableReader{PieceTable: pt}
+	buf := []byte{}
+	return string(reader.Text(buf))
+}
+
 func TestInsert(t *testing.T) {
 	pt := NewPieceTable([]byte{})
-	reader := PieceTableReader{PieceTable: pt}
 	pt.Insert(0, "Hello, world")
 	pt.Insert(6, " Go")
 
-	buf := []byte{}
-
-	if string(reader.Text(buf)) != "Hello, Go world" {
+	if readTableContent(pt) != "Hello, Go world" {
 		t.Fail()
 	}
 
 	pt = NewPieceTable([]byte("Hello, world"))
-	reader = PieceTableReader{PieceTable: pt}
 	pt.Insert(6, " Go")
 	pt.Insert(6, " welcome to the")
 
-	buf = buf[:0]
-
-	expected := string(reader.Text(buf))
+	expected := readTableContent(pt)
 	if expected != "Hello, welcome to the Go world" {
 		t.Fail()
 	}
@@ -31,15 +31,13 @@ func TestInsert(t *testing.T) {
 
 func TestAppendInsert(t *testing.T) {
 	pt := NewPieceTable([]byte{})
-	reader := PieceTableReader{PieceTable: pt}
 	pt.Insert(0, "H")
 	pt.Insert(1, "e")
 	pt.Insert(2, "l")
 	pt.Insert(3, "l")
 	pt.Insert(4, "o")
 
-	buf := []byte{}
-	expected := string(reader.Text(buf))
+	expected := readTableContent(pt)
 	if expected != "Hello" {
 		t.Fail()
 	}
@@ -57,7 +55,6 @@ func TestAppendInsert(t *testing.T) {
 
 func TestUndo(t *testing.T) {
 	pt := NewPieceTable([]byte(""))
-	reader := PieceTableReader{PieceTable: pt}
 
 	pt.Insert(0, "Hello, ")
 	pt.Insert(7, "world")
@@ -95,8 +92,7 @@ func TestUndo(t *testing.T) {
 		t.Fail()
 	}
 
-	buf := []byte{}
-	expected := string(reader.Text(buf))
+	expected := readTableContent(pt)
 	if expected != "Hello, " {
 		t.Fail()
 	}
@@ -110,9 +106,53 @@ func TestUndo(t *testing.T) {
 		t.Fail()
 	}
 
-	buf = buf[:0]
-	expected = string(reader.Text(buf))
+	expected = readTableContent(pt)
 	if expected != "" {
+		t.Fail()
+	}
+
+}
+
+func TestUndoRedo(t *testing.T) {
+	pt := NewPieceTable([]byte(""))
+
+	pt.Insert(0, "Hello")
+
+	if pt.undoStack.depth() != 1 {
+		t.Fail()
+	}
+
+	//runeLen, bytes :=  pt.undoStack.ranges[0].Length()
+
+	//t.Logf("undostack range length: %d, %d", runeLen, bytes)
+
+	if pt.redoStack.depth() != 0 {
+		t.Fail()
+	}
+
+	pt.Undo()
+	if pt.undoStack.depth() != 0 {
+		t.Fail()
+	}
+
+	if pt.redoStack.depth() != 1 {
+		t.Fail()
+	}
+
+	pt.Redo()
+	if pt.undoStack.depth() != 1 {
+		t.Fail()
+	}
+
+	if pt.redoStack.depth() != 0 {
+		t.Fail()
+	}
+
+	// After insert or other operations, redo stack should be empty.
+	pt.Insert(5, "world")
+	pt.Undo()
+	pt.Insert(5, "Golang")
+	if pt.redoStack.depth() > 0 {
 		t.Fail()
 	}
 

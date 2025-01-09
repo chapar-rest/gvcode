@@ -8,7 +8,7 @@ type piece struct {
 
 	// offset is the rune offset in the buffer.
 	offset int
-	// length is the length of text of the piece covers.
+	// length is the rune length of text of the piece covers.
 	length int
 	// byte offset in the buffer.
 	byteOff int
@@ -28,17 +28,13 @@ type pieceList struct {
 }
 
 // A piece-range effectively represents the range of pieces affected by an operation on the sequence.
+// Two kinds range exist here:
+//  1. Normal range of pieces with the first and last all effective pieces.
+//  2. Boundary range that has no piece in the range. The first and last pointer points to the encompassed pieces in the sequence.
 type pieceRange struct {
 	first    *piece
 	last     *piece
 	boundary bool
-
-	// The sequence length in rune before the time the operation occurs.
-	seqLength int
-	// The sequence byte size at before time the operation occurs.
-	seqBytes int
-	// the operation location in the sequence.
-	runeIndex int
 }
 
 func newPieceList() *pieceList {
@@ -74,7 +70,7 @@ func (pl *pieceList) InsertAfter(existing *piece, newPiece *piece) {
 	existing.next = newPiece
 }
 
-func (pl *pieceList) InsertBeforeTail(newPiece *piece) {
+func (pl *pieceList) Append(newPiece *piece) {
 	pl.InsertBefore(pl.tail, newPiece)
 }
 
@@ -122,19 +118,6 @@ func (pl *pieceList) Length() int {
 	return t
 }
 
-// create a new piece range by providing the current sequence length, and the operation location in rune index.
-func newUndoPieceRange(seqLength, seqBytes int, runeIndex int) *pieceRange {
-	return &pieceRange{
-		seqLength: seqLength,
-		seqBytes:  seqBytes,
-		runeIndex: runeIndex,
-	}
-}
-
-func newPieceRange() *pieceRange {
-	return &pieceRange{}
-}
-
 // AsBoundary turns the pieceRange to a boundary range by linking its first to the prev node of target,
 // and the last ndoe as target.
 func (p *pieceRange) AsBoundary(target *piece) {
@@ -143,17 +126,17 @@ func (p *pieceRange) AsBoundary(target *piece) {
 	p.boundary = true
 }
 
-func (p *pieceRange) Length() int {
+func (p *pieceRange) Length() (runes, bytes int) {
 	if p.first == nil || p.boundary {
-		return 0
+		return 0, 0
 	}
 
-	len := 0
 	for n := p.first; n != p.last.next; n = n.next {
-		len += n.length
+		runes += n.length
+		bytes += n.byteLength
 	}
 
-	return len
+	return
 }
 
 func (p *pieceRange) Append(piece *piece) {
@@ -173,6 +156,12 @@ func (p *pieceRange) Append(piece *piece) {
 	p.boundary = false
 }
 
+// Swap replaces the pieces of p that it contains with the ones from the dest pieceRange.
+// If p is in the main list, this method links the pieces list contained in dest into the main list.
+// After swap p's linkage still points to the previous places so that it can be used for undo by pushing
+// it into the undo stack.
+//
+// The opposite operation is Restore.
 func (p *pieceRange) Swap(dest *pieceRange) {
 	if p.boundary {
 		if !dest.boundary {
@@ -200,11 +189,11 @@ func (p *pieceRange) Restore() {
 		first := p.first.next
 		last := p.last.prev
 
-		// unlink the pieces from the list
+		// Unlink the pieces from the list
 		p.first.next = p.last
 		p.last.prev = p.first
 
-		// store the removed range
+		// Store the removed range
 		p.first = first
 		p.last = last
 		p.boundary = false
@@ -212,7 +201,7 @@ func (p *pieceRange) Restore() {
 		first := p.first.prev
 		last := p.last.next
 
-		// empty range
+		// The dest range is empty, thus a boundary range.
 		if first.next == last {
 			// move the old range back to the empty region.
 			first.next = p.first
@@ -222,9 +211,8 @@ func (p *pieceRange) Restore() {
 			p.last = last
 			p.boundary = true
 		} else {
-			// replacing a range of pieces in the list.
-
-			// find the range that is currently in the list
+			// Replacing a range of pieces in the list.
+			// Find the range that is currently in the list
 			first := first.next
 			last := last.prev
 
@@ -240,73 +228,3 @@ func (p *pieceRange) Restore() {
 		}
 	}
 }
-
-// void sequence::restore_spanrange (span_range *range, bool undo_or_redo)
-// {
-// 	if(range->boundary)
-// 	{
-// 		span *first = range->first->next;
-// 		span *last  = range->last->prev;
-
-// 		// unlink spans from main list
-// 		range->first->next = range->last;
-// 		range->last->prev  = range->first;
-
-// 		// store the span range we just removed
-// 		range->first = first;
-// 		range->last  = last;
-// 		range->boundary = false;
-// 	}
-// 	else
-// 	{
-// 		span *first = range->first->prev;
-// 		span *last  = range->last->next;
-
-// 		// are we moving spans into an "empty" region?
-// 		// (i.e. inbetween two adjacent spans)
-// 		if(first->next == last)
-// 		{
-// 			// move the old spans back into the empty region
-// 			first->next = range->first;
-// 			last->prev  = range->last;
-
-// 			// store the span range we just removed
-// 			range->first  = first;
-// 			range->last   = last;
-// 			range->boundary  = true;
-// 		}
-// 		// we are replacing a range of spans in the list,
-// 		// so swap the spans in the list with the one's in our "undo" event
-// 		else
-// 		{
-// 			// find the span range that is currently in the list
-// 			first = first->next;
-// 			last  = last->prev;
-
-// 			// unlink the the spans from the main list
-// 			first->prev->next = range->first;
-// 			last->next->prev  = range->last;
-
-// 			// store the span range we just removed
-// 			range->first = first;
-// 			range->last  = last;
-// 			range->boundary = false;
-// 		}
-// 	}
-
-// 	// update the 'sequence length' and 'quicksave' states
-// 	std::swap(range->sequence_length,    sequence_length);
-// 	std::swap(range->quicksave,			 can_quicksave);
-
-// 	undoredo_index	= range->index;
-
-// 	if(range->act == action_erase && undo_or_redo == true ||
-// 		range->act != action_erase && undo_or_redo == false)
-// 	{
-// 		undoredo_length = range->length;
-// 	}
-// 	else
-// 	{
-// 		undoredo_length = 0;
-// 	}
-// }
