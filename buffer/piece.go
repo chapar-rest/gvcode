@@ -126,19 +126,6 @@ func (p *pieceRange) AsBoundary(target *piece) {
 	p.boundary = true
 }
 
-func (p *pieceRange) Length() (runes, bytes int) {
-	if p.first == nil || p.boundary {
-		return 0, 0
-	}
-
-	for n := p.first; n != p.last.next; n = n.next {
-		runes += n.length
-		bytes += n.byteLength
-	}
-
-	return
-}
-
 func (p *pieceRange) Append(piece *piece) {
 	if piece == nil {
 		return
@@ -227,4 +214,36 @@ func (p *pieceRange) Restore() {
 
 		}
 	}
+}
+
+// Size returns the runes and bytes contained in the pieces of the range.
+func (p *pieceRange) Size() (runes, bytes int) {
+	if p.first == nil || p.boundary {
+		return 0, 0
+	}
+
+	for n := p.first; n != p.last.next; n = n.next {
+		runes += n.length
+		bytes += n.byteLength
+	}
+
+	return
+}
+
+// Length returns the total pieces in the range.
+func (p *pieceRange) Length() int {
+	if p.first == nil || p.boundary {
+		return 0
+	}
+
+	t := 0
+	if p.first == p.last {
+		return 1
+	}
+	
+	for n := p.first; n != p.last.next; n = n.next {
+		t++
+	}
+
+	return t
 }

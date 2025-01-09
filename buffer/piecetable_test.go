@@ -157,3 +157,65 @@ func TestUndoRedo(t *testing.T) {
 	}
 
 }
+
+func TestErase(t *testing.T) {
+	pt := NewPieceTable([]byte(""))
+	pt.Insert(0, "Hello")
+	pt.Insert(5, ",world")
+
+	// Erase start at the boundary of start piece, and end in the middle of the first piece.
+	pt.Erase(0, 3)
+	content := readTableContent(pt)
+	if content != "lo,world" {
+		t.Log("current pieces in piece table: ")
+		for p := pt.pieces.Head(); p != pt.pieces.tail; p = p.next {
+			t.Log(string(pt.getBuf(p.source).getTextByRange(p.byteOff, p.byteLength)))
+		}
+
+		t.Errorf("expected: lo,world, actual: %s", content)
+	}
+
+	pt.Undo()
+	content = readTableContent(pt)
+	if content != "Hello,world" {
+		t.Log(content)
+		t.Fail()
+	}
+
+	// Erase start and end in the middle of a piece
+	pt.Erase(6, 8)
+	content = readTableContent(pt)
+	if content != "Hello,rld" {
+		t.Log(content)
+		t.Fail()
+	}
+
+	pt.Undo()
+
+	// Erase start in the middle of a piece, and end in the boundary.
+	pt.Erase(2, 5)
+	content = readTableContent(pt)
+	if content != "He,world" {
+		t.Log(content)
+		t.Fail()
+	}
+
+	pt.Undo()
+
+	// Erase start and end in the boundary.
+	pt.Erase(0, 5)
+	content = readTableContent(pt)
+	if content != ",world" {
+		t.Log(content)
+		t.Fail()
+	}
+
+	pt.Undo()
+	// Erase start and end in the boundary.
+	pt.Erase(0, 11)
+	content = readTableContent(pt)
+	if content != "" {
+		t.Log(content)
+		t.Fail()
+	}
+}

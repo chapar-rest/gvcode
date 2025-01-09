@@ -229,14 +229,14 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) bool
 
 	// remove the next event from the source stack
 	rng := src.pop()
-	newRuneLen, newBytes := rng.Length()
+	newRuneLen, newBytes := rng.Size()
 
 	// restore to the old piece range.
 	rng.Restore()
 	// add the restored range onto the destination stack
 	dest.push(rng)
 
-	lastRuneLen, lastBytes := rng.Length()
+	lastRuneLen, lastBytes := rng.Size()
 	pt.seqLength += newRuneLen - lastRuneLen
 	pt.seqBytes += newBytes - lastBytes
 
@@ -244,7 +244,15 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) bool
 }
 
 func (pt *PieceTable) Erase(startOff, endOff int) bool {
-	if startOff >= endOff || startOff >= pt.seqLength || endOff >= pt.seqLength || endOff-startOff > pt.seqLength {
+	if startOff > endOff {
+		startOff, endOff = endOff, startOff
+	}
+
+	if endOff > pt.seqLength {
+		endOff = pt.seqLength
+	}
+
+	if startOff == endOff {
 		return false
 	}
 
@@ -258,22 +266,57 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 	newPieces := &pieceRange{}
 	bytesErased := 0
 
-	// Delete start in the middle of a piece. Split the piece and keep the left part.
-	if inRuneOff > 0 {
-		// keep the left part of the start piece.
-		byteLen := pt.getBuf(startPiece.source).bytesForRange(startPiece.offset, inRuneOff)
+	// start and end all in the middle of the startPiece. Keep both sides of the startPiece.
+	if inRuneOff > 0 && endOff-startOff <= startPiece.length-inRuneOff {
+		leftByteLen := pt.getBuf(startPiece.source).bytesForRange(startPiece.offset, inRuneOff)
+
+		rightByteLen := pt.getBuf(startPiece.source).bytesForRange(startPiece.offset+inRuneOff+endOff-startOff, startPiece.length-inRuneOff-(endOff-startOff))
+		rightByteOff := pt.getBuf(startPiece.source).RuneOffset(startPiece.offset + inRuneOff + endOff - startOff)
 		newPieces.Append(&piece{
 			source:     startPiece.source,
 			offset:     startPiece.offset,
 			length:     inRuneOff,
 			byteOff:    startPiece.byteOff,
-			byteLength: byteLen,
+			byteLength: leftByteLen,
 		})
-		bytesErased += startPiece.byteLength - byteLen
+		newPieces.Append(&piece{
+			source:     startPiece.source,
+			offset:     startPiece.offset + inRuneOff + endOff - startOff,
+			length:     startPiece.length - inRuneOff - (endOff - startOff),
+			byteOff:    rightByteOff,
+			byteLength: rightByteLen,
+		})
+		bytesErased += startPiece.byteLength - leftByteLen - rightByteLen
+		// swap link the new piece into the sequence
+		oldPieces.Swap(newPieces)
+		pt.undoStack.push(oldPieces)
+		pt.seqLength -= endOff - startOff
+		pt.seqBytes -= bytesErased
+		return true
+	}
+
+	// Delete start in the middle of a piece. Split the piece and keep the left part.
+	if inRuneOff > 0 {
+		leftByteLen := pt.getBuf(startPiece.source).bytesForRange(startPiece.offset, inRuneOff)
+
+		newPieces.Append(&piece{
+			source:     startPiece.source,
+			offset:     startPiece.offset,
+			length:     inRuneOff,
+			byteOff:    startPiece.byteOff,
+			byteLength: leftByteLen,
+		})
+		bytesErased += startPiece.byteLength - leftByteLen
+		startPiece = startPiece.next
 	}
 
 	offset := startOff
-	for n := startPiece.next; n != pt.pieces.tail; n = n.next {
+	n := startPiece
+	for ; n != pt.pieces.tail; n = n.next {
+		if offset >= endOff {
+			break
+		}
+
 		if offset < endOff && offset+n.length > endOff {
 			// Found the last affected piece, and the delete stops in the middle of it.
 			// Keep the right part of the end piece.
@@ -293,15 +336,20 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 		}
 
 		// push pieces in the middle and the end piece to undo stack.
-		oldPieces.Append(n)
-		offset += n.length
-		if offset >= endOff {
-			break
+		if n != startPiece {
+			oldPieces.Append(n)
 		}
+
+		offset += n.length
+	}
+
+	if newPieces.Length() == 0 {
+		newPieces.AsBoundary(n)
 	}
 
 	// swap link the new piece into the sequence
 	oldPieces.Swap(newPieces)
+	pt.undoStack.push(oldPieces)
 	pt.seqLength -= endOff - startOff
 	pt.seqBytes -= bytesErased
 
