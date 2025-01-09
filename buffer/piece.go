@@ -35,6 +35,10 @@ type pieceRange struct {
 	first    *piece
 	last     *piece
 	boundary bool
+
+	// batchId is the id of a group of modifications cased by a atomic operation.
+	// undo/redo should check continuous same batchId to find all batched modifications.
+	batchId *int
 }
 
 func newPieceList() *pieceList {
@@ -240,7 +244,7 @@ func (p *pieceRange) Length() int {
 	if p.first == p.last {
 		return 1
 	}
-	
+
 	for n := p.first; n != p.last.next; n = n.next {
 		t++
 	}

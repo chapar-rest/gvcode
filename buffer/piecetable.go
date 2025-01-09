@@ -15,6 +15,15 @@ const (
 	actionInsert
 )
 
+// PieceTable implements a piece table data structure.
+// See the following resources for more information:
+//
+// https://en.wikipedia.org/wiki/Piece_table
+//
+// https://www.cs.unm.edu/~crowley/papers/sds.pdf
+//
+// This implementation is highly inspired by the internal design described in
+// James Brown's Piece Chain(http://www.catch22.net/tuts/neatpad/piece-chains)
 type PieceTable struct {
 	originalBuf *textBuffer
 	modifyBuf   *textBuffer
@@ -22,7 +31,6 @@ type PieceTable struct {
 	seqLength int
 	// bytes size of the text sequence.
 	seqBytes int
-	seqIndex runeOffIndex
 
 	// undo stack and redo stack
 	undoStack *pieceRangeStack
@@ -35,6 +43,9 @@ type PieceTable struct {
 	lastActionEndIdx int
 	// last inserted piece, for insertion optimization purpose.
 	lastInsertPiece *piece
+
+	// setting a batchId to group
+	currentBatch *int
 }
 
 func NewPieceTable(text []byte) *PieceTable {
@@ -95,6 +106,14 @@ func (pt *PieceTable) getBuf(source bufSrc) *textBuffer {
 func (pt *PieceTable) recordAction(action action, runeIndex int) {
 	pt.lastAction = action
 	pt.lastActionEndIdx = runeIndex
+}
+
+func (pt *PieceTable) push2UndoStack(rng *pieceRange) {
+	if pt.currentBatch != nil {
+		rng.batchId = pt.currentBatch
+	}
+
+	pt.undoStack.push(rng)
 }
 
 // Insert insert text at the logical position specifed by runeIndex. runeIndex is measured by rune.
@@ -161,7 +180,7 @@ func (pt *PieceTable) insertAtBoundary(runeIndex int, text string, oldPiece *pie
 	// insertion is at the boundary of 2 pieces.
 	oldPieces := &pieceRange{}
 	oldPieces.AsBoundary(oldPiece)
-	pt.undoStack.push(oldPieces)
+	pt.push2UndoStack(oldPieces)
 
 	newPieces := &pieceRange{}
 	newPieces.Append(newPiece)
@@ -187,7 +206,7 @@ func (pt *PieceTable) insertInMiddle(runeIndex int, text string, oldPiece *piece
 	// preserve the old pieces as a pieceRange, and push to the undo stack.
 	oldPieces := &pieceRange{}
 	oldPieces.Append(oldPiece)
-	pt.undoStack.push(oldPieces)
+	pt.push2UndoStack(oldPieces)
 
 	// spilt the old piece into 2 new pieces, and insert the newly added text.
 	newPieces := &pieceRange{}
@@ -227,18 +246,36 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) bool
 		return false
 	}
 
+	restoreFunc := func(rng *pieceRange) {
+		// non-batched undo/redo
+		newRuneLen, newBytes := rng.Size()
+
+		// restore to the old piece range.
+		rng.Restore()
+		// add the restored range onto the destination stack
+		dest.push(rng)
+
+		lastRuneLen, lastBytes := rng.Size()
+		pt.seqLength += newRuneLen - lastRuneLen
+		pt.seqBytes += newBytes - lastBytes
+	}
+
 	// remove the next event from the source stack
-	rng := src.pop()
-	newRuneLen, newBytes := rng.Size()
+	rng := src.peek()
+	batchId := rng.batchId
+	if batchId == nil {
+		src.pop()
+		restoreFunc(rng)
+		return true
+	}
 
-	// restore to the old piece range.
-	rng.Restore()
-	// add the restored range onto the destination stack
-	dest.push(rng)
+	for batchId != nil && rng != nil && batchId == rng.batchId {
+		src.pop()
+		restoreFunc(rng)
 
-	lastRuneLen, lastBytes := rng.Size()
-	pt.seqLength += newRuneLen - lastRuneLen
-	pt.seqBytes += newBytes - lastBytes
+		// Try the next.
+		rng = src.peek()
+	}
 
 	return true
 }
@@ -289,7 +326,7 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 		bytesErased += startPiece.byteLength - leftByteLen - rightByteLen
 		// swap link the new piece into the sequence
 		oldPieces.Swap(newPieces)
-		pt.undoStack.push(oldPieces)
+		pt.push2UndoStack(oldPieces)
 		pt.seqLength -= endOff - startOff
 		pt.seqBytes -= bytesErased
 		return true
@@ -349,7 +386,7 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 
 	// swap link the new piece into the sequence
 	oldPieces.Swap(newPieces)
-	pt.undoStack.push(oldPieces)
+	pt.push2UndoStack(oldPieces)
 	pt.seqLength -= endOff - startOff
 	pt.seqBytes -= bytesErased
 
@@ -357,8 +394,28 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 	return true
 }
 
-func (pt *PieceTable) Replace() {
+// Replace removes text from startOff to endOff(exclusive), and insert text at the position of startOff.
+func (pt *PieceTable) Replace(startOff, endOff int, text string) bool {
+	if startOff > endOff {
+		startOff, endOff = endOff, startOff
+	}
 
+	if endOff > pt.seqLength {
+		endOff = pt.seqLength
+	}
+
+	if startOff == endOff {
+		return pt.Insert(startOff, text)
+	}
+
+	pt.GroupOp()
+	defer pt.UnGroupOp()
+
+	if !pt.Erase(startOff, endOff) {
+		return false
+	}
+
+	return pt.Insert(startOff, text)
 }
 
 func (pt *PieceTable) Undo() bool {
@@ -367,6 +424,20 @@ func (pt *PieceTable) Undo() bool {
 
 func (pt *PieceTable) Redo() bool {
 	return pt.undoRedo(pt.redoStack, pt.undoStack)
+}
+
+// Group operations such as insert, earase or replace in a batch.
+// Nested call share the same single batch.
+func (pt *PieceTable) GroupOp() {
+	if pt.currentBatch == nil {
+		pt.currentBatch = new(int)
+	}
+}
+
+// Ungroup a batch. Latter insert, earase or replace operations outside of
+// a group is not batched.
+func (pt *PieceTable) UnGroupOp() {
+	pt.currentBatch = nil
 }
 
 // Size returns the total length of the document data in bytes.
