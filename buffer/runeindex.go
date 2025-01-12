@@ -38,7 +38,7 @@ func (r *runeOffIndex) indexOfRune(runeIndex int) offsetEntry {
 		return entry.runes >= runeIndex
 	})
 
-	// Return the entry guaranteed to be less than or equal to r.
+	// Return the entry guaranteed to be less than or equal to runeIndex.
 	if i > 0 {
 		i--
 	}

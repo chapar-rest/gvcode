@@ -13,6 +13,8 @@ const (
 const (
 	actionUnknown action = iota
 	actionInsert
+	actionErase
+	actionReplace
 )
 
 // PieceTable implements a piece table data structure.
@@ -22,8 +24,8 @@ const (
 //
 // https://www.cs.unm.edu/~crowley/papers/sds.pdf
 //
-// This implementation is highly inspired by the internal design described in
-// James Brown's Piece Chain(http://www.catch22.net/tuts/neatpad/piece-chains)
+// This implementation is heavily inspired by the design described in
+// James Brown's Piece Chain(http://www.catch22.net/tuts/neatpad/piece-chains).
 type PieceTable struct {
 	originalBuf *textBuffer
 	modifyBuf   *textBuffer
@@ -37,6 +39,8 @@ type PieceTable struct {
 	redoStack *pieceRangeStack
 	// piece list
 	pieces *pieceList
+	// line management
+	lineIndex
 
 	// last action and action position in rune offset in the text sequence.
 	lastAction       action
@@ -80,7 +84,7 @@ func (pt *PieceTable) init(text []byte) {
 	pt.pieces.Append(piece)
 	pt.seqLength = piece.length
 	pt.seqBytes = piece.byteLength
-	// pt.seqIndex = runeOffIndex{src: pt}
+	pt.lineIndex.UpdateOnInsert(0, text)
 }
 
 func (pt *PieceTable) addToBuffer(source bufSrc, text []byte) (int, int, int) {
@@ -108,12 +112,14 @@ func (pt *PieceTable) recordAction(action action, runeIndex int) {
 	pt.lastActionEndIdx = runeIndex
 }
 
-func (pt *PieceTable) push2UndoStack(rng *pieceRange) {
+func (pt *PieceTable) push2UndoStack(rng, newRng *pieceRange) {
 	if pt.currentBatch != nil {
 		rng.batchId = pt.currentBatch
 	}
 
 	pt.undoStack.push(rng)
+	// swap link the new piece into the sequence
+	rng.Swap(newRng)
 }
 
 // Insert insert text at the logical position specifed by runeIndex. runeIndex is measured by rune.
@@ -129,6 +135,7 @@ func (pt *PieceTable) Insert(runeIndex int, text string) bool {
 
 	// special-case: inserting at the end of a prior insertion at a piece boundary.
 	if pt.tryAppendToLastPiece(runeIndex, text) {
+		pt.lineIndex.UpdateOnInsert(runeIndex, []byte(text))
 		return true
 	}
 
@@ -139,7 +146,8 @@ func (pt *PieceTable) Insert(runeIndex int, text string) bool {
 	} else {
 		pt.insertInMiddle(runeIndex, text, oldPiece, inRuneOff)
 	}
-
+	// update line index
+	pt.lineIndex.UpdateOnInsert(runeIndex, []byte(text))
 	return true
 }
 
@@ -180,12 +188,11 @@ func (pt *PieceTable) insertAtBoundary(runeIndex int, text string, oldPiece *pie
 	// insertion is at the boundary of 2 pieces.
 	oldPieces := &pieceRange{}
 	oldPieces.AsBoundary(oldPiece)
-	pt.push2UndoStack(oldPieces)
 
 	newPieces := &pieceRange{}
 	newPieces.Append(newPiece)
 	// swap link the new piece into the sequence
-	oldPieces.Swap(newPieces)
+	pt.push2UndoStack(oldPieces, newPieces)
 	pt.seqLength += textRunes
 	pt.seqBytes += len(text)
 	pt.recordAction(actionInsert, runeIndex+textRunes)
@@ -206,7 +213,6 @@ func (pt *PieceTable) insertInMiddle(runeIndex int, text string, oldPiece *piece
 	// preserve the old pieces as a pieceRange, and push to the undo stack.
 	oldPieces := &pieceRange{}
 	oldPieces.Append(oldPiece)
-	pt.push2UndoStack(oldPieces)
 
 	// spilt the old piece into 2 new pieces, and insert the newly added text.
 	newPieces := &pieceRange{}
@@ -235,7 +241,7 @@ func (pt *PieceTable) insertInMiddle(runeIndex int, text string, oldPiece *piece
 		byteLength: byteLen,
 	})
 
-	oldPieces.Swap(newPieces)
+	pt.push2UndoStack(oldPieces, newPieces)
 	pt.seqLength += textRunes
 	pt.seqBytes += len(text)
 	pt.recordAction(actionInsert, runeIndex+textRunes)
@@ -324,9 +330,9 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 			byteLength: rightByteLen,
 		})
 		bytesErased += startPiece.byteLength - leftByteLen - rightByteLen
-		// swap link the new piece into the sequence
-		oldPieces.Swap(newPieces)
-		pt.push2UndoStack(oldPieces)
+		pt.push2UndoStack(oldPieces, newPieces)
+		// update line index
+		pt.lineIndex.UpdateOnDelete(startOff, endOff-startOff)
 		pt.seqLength -= endOff - startOff
 		pt.seqBytes -= bytesErased
 		return true
@@ -385,8 +391,9 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 	}
 
 	// swap link the new piece into the sequence
-	oldPieces.Swap(newPieces)
-	pt.push2UndoStack(oldPieces)
+	pt.push2UndoStack(oldPieces, newPieces)
+	// update line index
+	pt.lineIndex.UpdateOnDelete(startOff, endOff-startOff)
 	pt.seqLength -= endOff - startOff
 	pt.seqBytes -= bytesErased
 
