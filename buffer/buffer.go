@@ -67,3 +67,10 @@ func (tb *textBuffer) getTextByRange(byteIdx int, size int) []byte {
 
 	return tb.buf[byteIdx : byteIdx+size]
 }
+
+func (tb *textBuffer) getTextByRuneRange(runeIdx int, size int) []byte {
+	start := tb.RuneOffset(runeIdx)
+	end := tb.RuneOffset(runeIdx + size)
+
+	return tb.getTextByRange(start, end-start)
+}

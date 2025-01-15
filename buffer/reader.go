@@ -2,8 +2,12 @@ package buffer
 
 import (
 	"io"
+	"unicode/utf8"
 )
 
+var _ TextSource = (*PieceTableReader)(nil)
+
+// PieceTableReader implements a [TextSource].
 type PieceTableReader struct {
 	*PieceTable
 
@@ -78,4 +82,62 @@ func (r *PieceTableReader) Text(buf []byte) []byte {
 	n, _ := io.ReadFull(r, buf)
 	buf = buf[:n]
 	return buf
+}
+
+// RuneOffset returns the byte offset for the rune at position runeIndex.
+func (r *PieceTableReader) RuneOffset(runeIndex int) int {
+	if r.seqLength == 0 {
+		return 0
+	}
+
+	if runeIndex >= r.seqLength {
+		return r.seqBytes - 1
+	}
+
+	var bytes int
+	var runes int
+
+	for n := r.pieces.Head(); n != r.pieces.tail; n = n.next {
+		if runes+n.length > runeIndex {
+			return bytes + r.getBuf(n.source).bytesForRange(n.offset, runeIndex-runes)
+		}
+
+		bytes += n.byteLength
+		runes += n.length
+
+	}
+
+	return bytes
+}
+
+// ReadRuneAt reads the rune starting at the given byte offset, if any.
+func (r *PieceTableReader) ReadRuneAt(off int64) (rune, int, error) {
+	var buf [utf8.UTFMax]byte
+	b := buf[:]
+	n, err := r.ReadAt(b, off)
+	b = b[:n]
+	c, s := utf8.DecodeRune(b)
+	return c, s, err
+}
+
+// ReadRuneAt reads the run prior to the given byte offset, if any.
+func (r *PieceTableReader) ReadRuneBefore(off int64) (rune, int, error) {
+	var buf [utf8.UTFMax]byte
+	b := buf[:]
+	if off < utf8.UTFMax {
+		b = b[:off]
+		off = 0
+	} else {
+		off -= utf8.UTFMax
+	}
+	n, err := r.ReadAt(b, off)
+	b = b[:n]
+	c, s := utf8.DecodeLastRune(b)
+	return c, s, err
+}
+
+func NewTextSource() *PieceTableReader {
+	return &PieceTableReader{
+		PieceTable: NewPieceTable([]byte("")),
+	}
 }

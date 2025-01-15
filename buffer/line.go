@@ -180,88 +180,115 @@ func (li *lineIndex) applyInsert(runeIndex int, newLines []lineInfo) {
 }
 
 func (li *lineIndex) applyDelete(runeIndex int, length int) []lineInfo {
-	var currentRuneCount int
+	var startLineRuneCount, endLineRuneCount int
 	var startIndex, endIndex int
 	var removedLines []lineInfo
 
 	// Locate the starting and ending indices of the deletion
 	for i, line := range li.lines {
-		if currentRuneCount+line.length > runeIndex {
+		if startLineRuneCount+line.length > runeIndex {
 			startIndex = i
 			break
 		}
-		currentRuneCount += line.length
+		startLineRuneCount += line.length
 	}
 
+	endLineRuneCount = startLineRuneCount
 	for i, line := range li.lines[startIndex:] {
-		if currentRuneCount+line.length >= runeIndex+length {
+		if endLineRuneCount+line.length >= runeIndex+length {
 			endIndex = startIndex + i
 			break
 		}
-		currentRuneCount += line.length
+		endLineRuneCount += line.length
+	}
+
+	// If startIndex equals to endIndex, the line is to be splited into 2 or 3 parts,
+	// with the second part removed, and the other two or one being kept.
+	// And things would get harder when the end is just at the boundary of the line, in
+	// which case the current line should be joined with the next line(if there is any).
+	if startIndex == endIndex {
+		leftPart := runeIndex - startLineRuneCount
+		rightPartLen := li.lines[endIndex].length - leftPart - length
+		removedLines = append(removedLines, lineInfo{length: length, hasLineBreak: rightPartLen <= 0})
+
+		// split into 2 parts.
+		if rightPartLen <= 0 {
+			// merge the current line with the next line
+			if endIndex+1 < len(li.lines) {
+				li.lines[endIndex+1].length += leftPart
+				li.lines = append(li.lines[:endIndex], li.lines[endIndex+1])
+			} else {
+				li.lines[endIndex] = lineInfo{length: leftPart, hasLineBreak: false}
+			}
+		} else {
+			// split into 3 parts
+			newLine := lineInfo{length: rightPartLen, hasLineBreak: li.lines[endIndex].hasLineBreak}
+			li.lines[endIndex] = lineInfo{length: leftPart, hasLineBreak: false}
+			if endIndex+1 < len(li.lines) {
+				li.lines = slices.Insert(li.lines, endIndex+1, newLine)
+			} else {
+				li.lines = append(li.lines, newLine)
+			}
+		}
+
+		return removedLines
+
 	}
 
 	// Handle the splitting of the starting line
 	//startLine := li.lines[startIndex]
-	splitLeft := runeIndex - currentRuneCount
+	splitLeft := runeIndex - startLineRuneCount
+	removed := lineInfo{
+		length:       li.lines[startIndex].length - splitLeft,
+		hasLineBreak: li.lines[startIndex].hasLineBreak,
+	}
+	removedLines = append(removedLines, removed)
 	if splitLeft > 0 {
-		leftPart := lineInfo{length: splitLeft, hasLineBreak: false}
-		li.lines[startIndex] = leftPart
+		li.lines[startIndex] = lineInfo{length: splitLeft, hasLineBreak: false}
 	} else {
 		li.lines = append(li.lines[:startIndex], li.lines[startIndex+1:]...)
 		endIndex--
 	}
 
+	i := startIndex + 1
+	for i < endIndex {
+		removedLines = append(removedLines, li.lines[i])
+		li.lines = append(li.lines[:i], li.lines[i+1:]...)
+		endIndex--
+		i++
+	}
+
 	// Handle the splitting of the ending line
 	if endIndex < len(li.lines) {
 		endLine := li.lines[endIndex]
-		splitRight := (runeIndex + length) - currentRuneCount
+		splitRight := (runeIndex + length) - endLineRuneCount
+		removed := lineInfo{
+			length: splitRight,
+		}
+
 		if splitRight < endLine.length {
 			rightPart := lineInfo{length: endLine.length - splitRight, hasLineBreak: endLine.hasLineBreak}
 			li.lines[endIndex] = rightPart
+			removed.hasLineBreak = false
 		} else {
+			removed.hasLineBreak = endLine.hasLineBreak
 			li.lines = append(li.lines[:endIndex], li.lines[endIndex+1:]...)
 		}
+
+		removedLines = append(removedLines, removed)
 	}
 
-	// Capture the removed lines
-	removedLines = li.lines[startIndex:endIndex]
-	li.lines = append(li.lines[:startIndex], li.lines[endIndex:]...)
+	// Check if the previous line has line break.
+	// Try to merge it with the previous line.
+	if endIndex >= 1 && len(li.lines) > endIndex && !li.lines[endIndex-1].hasLineBreak {
+		li.lines[endIndex-1].length += li.lines[endIndex].length
+		li.lines[endIndex-1].hasLineBreak = li.lines[endIndex].hasLineBreak
+		li.lines = append(li.lines[:endIndex], li.lines[endIndex+1:]...)
+
+	}
 
 	return removedLines
 }
-
-// func (li *lineIndex) applyDelete(runeIndex int, length int) []lineInfo {
-// 	removedLines := make([]lineInfo, 0)
-
-// 	// find the nearst line the delete starts.
-// 	lineLen := 0
-// 	for i := range li.lines {
-// 		lineLen += li.lines[i].length
-// 		if lineLen > runeIndex && length > 0 {
-// 			deleted := 0
-// 			if runeIndex-(lineLen-li.lines[i].length) < 0 {
-// 				deleted = min(length, li.lines[i].length-(lineLen-runeIndex))
-// 			} else {
-// 				deleted = min(length, li.lines[i].length)
-// 			}
-// 			li.lines[i].length -= deleted
-// 			removedLines = append(removedLines, lineInfo{length: deleted, hasLineBreak: li.lines[i].length <= 0})
-// 			length -= deleted
-// 		}
-
-// 		if length <= 0 {
-// 			break
-// 		}
-// 	}
-
-// 	// Line length may decrease to zero, should be removed from the index.
-// 	li.lines = slices.DeleteFunc(li.lines, func(line lineInfo) bool {
-// 		return line.length <= 0
-// 	})
-
-// 	return removedLines
-// }
 
 func (li *lineIndex) parseLine(text []byte) []lineInfo {
 	var lines []lineInfo

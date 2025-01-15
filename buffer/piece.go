@@ -27,6 +27,14 @@ type pieceList struct {
 	lastPieceOff int
 }
 
+// CursorPos keep track of the previous cursor position of undo/redo.
+type CursorPos struct {
+	// start rune offset
+	Start int
+	// end rune offset
+	End int
+}
+
 // A piece-range effectively represents the range of pieces affected by an operation on the sequence.
 // Two kinds range exist here:
 //  1. Normal range of pieces with the first and last all effective pieces.
@@ -36,6 +44,8 @@ type pieceRange struct {
 	last     *piece
 	boundary bool
 
+	// The cursor position in runes before insert or delete.
+	cursor CursorPos
 	// batchId is the id of a group of modifications cased by a atomic operation.
 	// undo/redo should check continuous same batchId to find all batched modifications.
 	batchId *int

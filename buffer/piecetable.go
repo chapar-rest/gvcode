@@ -47,7 +47,8 @@ type PieceTable struct {
 	lastActionEndIdx int
 	// last inserted piece, for insertion optimization purpose.
 	lastInsertPiece *piece
-
+	// changed tracks whether the sequence content has changed since the last call to Changed.
+	changed bool
 	// setting a batchId to group
 	currentBatch *int
 }
@@ -148,6 +149,7 @@ func (pt *PieceTable) Insert(runeIndex int, text string) bool {
 	}
 	// update line index
 	pt.lineIndex.UpdateOnInsert(runeIndex, []byte(text))
+	pt.changed = true
 	return true
 }
 
@@ -186,7 +188,9 @@ func (pt *PieceTable) insertAtBoundary(runeIndex int, text string, oldPiece *pie
 	pt.lastInsertPiece = newPiece
 
 	// insertion is at the boundary of 2 pieces.
-	oldPieces := &pieceRange{}
+	oldPieces := &pieceRange{
+		cursor: CursorPos{Start: runeIndex, End: runeIndex},
+	}
 	oldPieces.AsBoundary(oldPiece)
 
 	newPieces := &pieceRange{}
@@ -211,7 +215,9 @@ func (pt *PieceTable) insertInMiddle(runeIndex int, text string, oldPiece *piece
 	pt.lastInsertPiece = newPiece
 
 	// preserve the old pieces as a pieceRange, and push to the undo stack.
-	oldPieces := &pieceRange{}
+	oldPieces := &pieceRange{
+		cursor: CursorPos{Start: runeIndex, End: runeIndex},
+	}
 	oldPieces.Append(oldPiece)
 
 	// spilt the old piece into 2 new pieces, and insert the newly added text.
@@ -247,13 +253,15 @@ func (pt *PieceTable) insertInMiddle(runeIndex int, text string, oldPiece *piece
 	pt.recordAction(actionInsert, runeIndex+textRunes)
 }
 
-func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) bool {
+// undoRedo restores operation saved in src to dest. If there is a valid batchId, the src stack
+// is searched for continuous batched operations to restore one by one.
+// It returns all cursor postion(start and end rune offset) after restoration for all the operation.
+func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) ([]CursorPos, bool) {
 	if src.depth() <= 0 {
-		return false
+		return nil, false
 	}
 
-	restoreFunc := func(rng *pieceRange) {
-		// non-batched undo/redo
+	restoreFunc := func(rng *pieceRange) CursorPos {
 		newRuneLen, newBytes := rng.Size()
 
 		// restore to the old piece range.
@@ -264,29 +272,34 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) bool
 		lastRuneLen, lastBytes := rng.Size()
 		pt.seqLength += newRuneLen - lastRuneLen
 		pt.seqBytes += newBytes - lastBytes
+		pt.changed = true
+		return rng.cursor
 	}
 
+	cursors := make([]CursorPos, 0)
 	// remove the next event from the source stack
 	rng := src.peek()
 	batchId := rng.batchId
 	if batchId == nil {
 		src.pop()
-		restoreFunc(rng)
-		return true
+		cursors = append(cursors, restoreFunc(rng))
+		return cursors, true
 	}
 
 	for batchId != nil && rng != nil && batchId == rng.batchId {
 		src.pop()
-		restoreFunc(rng)
+		cursors = append(cursors, restoreFunc(rng))
 
 		// Try the next.
 		rng = src.peek()
 	}
 
-	return true
+	return cursors, true
 }
 
 func (pt *PieceTable) Erase(startOff, endOff int) bool {
+	cursor := CursorPos{Start: startOff, End: endOff}
+
 	if startOff > endOff {
 		startOff, endOff = endOff, startOff
 	}
@@ -300,10 +313,13 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 	}
 
 	pt.redoStack.clear()
+	defer func() { pt.changed = true }()
 
 	startPiece, inRuneOff := pt.pieces.FindPiece(startOff)
 
-	oldPieces := &pieceRange{}
+	oldPieces := &pieceRange{
+		cursor: cursor,
+	}
 	oldPieces.Append(startPiece)
 
 	newPieces := &pieceRange{}
@@ -403,10 +419,6 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 
 // Replace removes text from startOff to endOff(exclusive), and insert text at the position of startOff.
 func (pt *PieceTable) Replace(startOff, endOff int, text string) bool {
-	if startOff > endOff {
-		startOff, endOff = endOff, startOff
-	}
-
 	if endOff > pt.seqLength {
 		endOff = pt.seqLength
 	}
@@ -425,11 +437,11 @@ func (pt *PieceTable) Replace(startOff, endOff int, text string) bool {
 	return pt.Insert(startOff, text)
 }
 
-func (pt *PieceTable) Undo() bool {
+func (pt *PieceTable) Undo() ([]CursorPos, bool) {
 	return pt.undoRedo(pt.undoStack, pt.redoStack)
 }
 
-func (pt *PieceTable) Redo() bool {
+func (pt *PieceTable) Redo() ([]CursorPos, bool) {
 	return pt.undoRedo(pt.redoStack, pt.undoStack)
 }
 
@@ -447,7 +459,13 @@ func (pt *PieceTable) UnGroupOp() {
 	pt.currentBatch = nil
 }
 
-// Size returns the total length of the document data in bytes.
-func (pt *PieceTable) Length() int64 {
-	return int64(pt.seqLength)
+// Size returns the total length of the document data in runes.
+func (pt *PieceTable) Len() int {
+	return pt.seqLength
+}
+
+func (pt *PieceTable) Changed() bool {
+	c := pt.changed
+	pt.changed = false
+	return c
 }
