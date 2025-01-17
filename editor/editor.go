@@ -1,15 +1,11 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// This package is based on the Editor part of package gioui.org/widget.
+// This file is based on the Editor part of package gioui.org/widget.
 package editor
 
 import (
 	"image"
-	"io"
-	"strings"
+	"log"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"gioui.org/f32"
 	"gioui.org/font"
@@ -23,6 +19,7 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"github.com/oligo/gvcode/buffer"
 )
 
 // Editor implements an editable and scrollable text area.
@@ -38,13 +35,7 @@ type Editor struct {
 	// LineHeightScale is multiplied by LineHeight to determine the final gap
 	// between baselines. If zero, a sensible default will be used.
 	LineHeightScale float32
-	// SingleLine force the text to stay on a single line.
-	// SingleLine also sets the scrolling direction to
-	// horizontal.
-	SingleLine bool
-	// Submit enabled translation of carriage return keys to SubmitEvents.
-	// If not enabled, carriage returns are inserted as newlines in the text.
-	Submit bool
+
 	// ReadOnly controls whether the contents of the editor can be altered by
 	// user interaction. If set to true, the editor will allow selecting text
 	// and copying it interactively, but not modifying it.
@@ -54,18 +45,10 @@ type Editor struct {
 	InputHint key.InputHint
 	// MaxLen limits the editor content to a maximum length. Zero means no limit.
 	MaxLen int
-	// Filter is the list of characters allowed in the Editor. If Filter is empty,
-	// all characters are allowed.
-	Filter string
 	// WrapPolicy configures how displayed text will be broken into lines.
 	WrapPolicy text.WrapPolicy
 
-	// Keep editor focused is set to true, the editor will keep the focus.
-	// This is useful when the editor is used with a menu. so even when menu is focused, the editor will highlight the
-	// selected text.
-	KeepFocus bool
-
-	buffer     *editBuffer
+	buffer     buffer.TextSource
 	textStyles []*TextStyle
 	// Match ranges in rune offset, for text search.
 	matches []MatchRange
@@ -87,22 +70,8 @@ type Editor struct {
 	scroller    gesture.Scroll
 	scrollCaret bool
 	showCaret   bool
-
-	clicker gesture.Click
-
-	// history contains undo history.
-	history []modification
-	// nextHistoryIdx is the index within the history of the next modification. This
-	// is only not len(history) immediately after undo operations occur. It is framed as the "next" value
-	// to make the zero value consistent.
-	nextHistoryIdx int
-
-	pending []EditorEvent
-}
-
-type offEntry struct {
-	runes int
-	bytes int
+	clicker     gesture.Click
+	pending     []EditorEvent
 }
 
 type imeState struct {
@@ -147,12 +116,6 @@ type EditorEvent interface {
 // A ChangeEvent is generated for every user change to the text.
 type ChangeEvent struct{}
 
-// A SubmitEvent is generated when Submit is set
-// and a carriage return key is pressed.
-type SubmitEvent struct {
-	Text string
-}
-
 // A SelectEvent is generated when the user selects some text, or changes the
 // selection (e.g. with a shift-click), including if they remove the
 // selection. The selected text is not part of the event, on the theory that
@@ -171,14 +134,14 @@ const (
 // and has its fields synced with the editor.
 func (e *Editor) initBuffer() {
 	if e.buffer == nil {
-		e.buffer = new(editBuffer)
+		e.buffer = buffer.NewTextSource()
 		e.text.SetSource(e.buffer)
 	}
 	e.text.Alignment = e.Alignment
 	e.text.LineHeight = e.LineHeight
 	e.text.LineHeightScale = e.LineHeightScale
 	e.text.WrapPolicy = e.WrapPolicy
-	e.text.SingleLine = e.SingleLine
+	buffer.SetDebug(true)
 }
 
 // Update the state of the editor in response to input events. Update consumes editor
@@ -273,10 +236,6 @@ func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.Call
 // material to set the painting material for the selection.
 func (e *Editor) paintSelection(gtx layout.Context, material op.CallOp) {
 	e.initBuffer()
-	// comment below code to ensure selected text is highlighted when editor menu poped up.
-	if !gtx.Focused(e) && !e.KeepFocus {
-		return
-	}
 	e.text.PaintSelection(gtx, material)
 }
 
@@ -299,7 +258,7 @@ func (e *Editor) paintCaret(gtx layout.Context, material op.CallOp) {
 
 func (e *Editor) paintLineHighlight(gtx layout.Context, material op.CallOp) {
 	e.initBuffer()
-	e.text.paintLineHighlight(gtx, material)
+	//e.text.paintLineHighlight(gtx, material)
 }
 
 // SetMatches sets the matched text ranges after a find operation.
@@ -331,23 +290,21 @@ func (e *Editor) NextMatch(index int) {
 // Len is the length of the editor contents, in runes.
 func (e *Editor) Len() int {
 	e.initBuffer()
-	return e.text.Len()
+	return e.buffer.Len()
 }
 
 // Text returns the contents of the editor.
 func (e *Editor) Text() string {
 	e.initBuffer()
-	e.scratch = e.text.Text(e.scratch)
+	e.scratch = e.buffer.Text(e.scratch)
 	return string(e.scratch)
 }
 
 func (e *Editor) SetText(s string, addHistory bool) {
 	e.initBuffer()
-	if e.SingleLine {
-		s = strings.ReplaceAll(s, "\n", " ")
-	}
+
 	// disable history when loading doc. In other case history might be required
-	e.replace(0, e.text.Len(), s, addHistory, 0)
+	e.replace(0, e.text.Len(), s)
 	// Reset xoff and move the caret to the beginning.
 	e.SetCaret(0, 0)
 }
@@ -385,7 +342,7 @@ func (e *Editor) Delete(graphemeClusters int) (deletedRunes int) {
 	e.text.MoveCaret(0, graphemeClusters)
 	// Get the new rune offsets of the selection.
 	start, end = e.text.Selection()
-	e.replace(start, end, "", true, 0)
+	e.replace(start, end, "")
 	// Reset xoff.
 	e.text.MoveCaret(0, 0)
 	e.ClearSelection()
@@ -394,11 +351,10 @@ func (e *Editor) Delete(graphemeClusters int) (deletedRunes int) {
 
 func (e *Editor) Insert(s string) (insertedRunes int) {
 	e.initBuffer()
-	if e.SingleLine {
-		s = strings.ReplaceAll(s, "\n", " ")
-	}
+
 	start, end := e.text.Selection()
-	moves := e.replace(start, end, s, true, 0)
+	log.Println("selection: ", start, end)
+	moves := e.replace(start, end, s)
 	if end < start {
 		start = end
 	}
@@ -409,92 +365,42 @@ func (e *Editor) Insert(s string) (insertedRunes int) {
 	return moves
 }
 
-// modification represents a change to the contents of the editor buffer.
-// It contains the necessary information to both apply the change and
-// reverse it, and is useful for implementing undo/redo.
-// BatchIdx is added to support undo/redo of a replaceAll operation.
-type modification struct {
-	// BatchIdx is the index of a group of modifications cased by a atomic operation.
-	// undo/redo should check BatchIdx to find all modifications until it reaches 0.
-	BatchIdx int
-	// StartRune is the inclusive index of the first rune
-	// modified.
-	StartRune int
-	// ApplyContent is the data inserted at StartRune to
-	// apply this operation. It overwrites len([]rune(ReverseContent)) runes.
-	ApplyContent string
-	// ReverseContent is the data inserted at StartRune to
-	// apply this operation. It overwrites len([]rune(ApplyContent)) runes.
-	ReverseContent string
-}
-
-// undo applies the modification at e.history[e.historyIdx] and decrements
-// e.historyIdx.
+// undo revert the last operation(s).
 func (e *Editor) undo() (EditorEvent, bool) {
 	e.initBuffer()
-	if len(e.history) < 1 || e.nextHistoryIdx == 0 {
+
+	positions, ok := e.text.Undo()
+	if !ok {
 		return nil, false
 	}
 
-	undoOnce := func(mod modification) {
-		replaceEnd := mod.StartRune + utf8.RuneCountInString(mod.ApplyContent)
-		// batchIdx is omitted when addHistory is false.
-		e.replace(mod.StartRune, replaceEnd, mod.ReverseContent, false, 0)
-		caretEnd := mod.StartRune + utf8.RuneCountInString(mod.ReverseContent)
-		e.SetCaret(caretEnd, mod.StartRune)
-		e.nextHistoryIdx--
+	var start, end int
+	for _, pos := range positions {
+		start = pos.Start
+		end = pos.End
 	}
 
-	mod := e.history[e.nextHistoryIdx-1]
-	undoOnce(mod)
-
-	// ReplaceAll is in reverse order, so the first batchIdx will always be zero.
-	// Try next modification to check if they belong to a replaceAll group.
-	for e.nextHistoryIdx >= 1 {
-		mod = e.history[e.nextHistoryIdx-1]
-		if mod.BatchIdx == 0 {
-			break
-		}
-
-		undoOnce(mod)
-	}
-
+	e.SetCaret(end, start)
+	e.text.invalidate()
 	return ChangeEvent{}, true
 }
 
-// redo applies the modification at e.history[e.historyIdx] and increments
-// e.historyIdx.
+// redo revert the last undo operation.
 func (e *Editor) redo() (EditorEvent, bool) {
 	e.initBuffer()
-	if len(e.history) < 1 || e.nextHistoryIdx == len(e.history) {
+
+	positions, ok := e.text.Redo()
+	if !ok {
 		return nil, false
 	}
 
-	redoOnce := func(mod modification) {
-		end := mod.StartRune + utf8.RuneCountInString(mod.ReverseContent)
-		e.replace(mod.StartRune, end, mod.ApplyContent, false, 0)
-		caretEnd := mod.StartRune + utf8.RuneCountInString(mod.ApplyContent)
-		e.SetCaret(caretEnd, mod.StartRune)
-		e.nextHistoryIdx++
+	var start, end int
+	for _, pos := range positions {
+		start = pos.Start
+		end = pos.End
 	}
 
-	mod := e.history[e.nextHistoryIdx]
-	redoOnce(mod)
-
-	// ReplaceAll is in reverse order, so the first batchIdx will always >= zero.
-	// Try next modification to check if they belong to a replaceAll group.
-	if mod.BatchIdx != 0 {
-		for e.nextHistoryIdx < len(e.history) {
-			mod = e.history[e.nextHistoryIdx]
-			if mod.BatchIdx >= 0 {
-				redoOnce(mod)
-			}
-
-			if mod.BatchIdx == 0 {
-				break
-			}
-		}
-	}
+	e.SetCaret(end, start)
 
 	return ChangeEvent{}, true
 }
@@ -504,52 +410,15 @@ func (e *Editor) redo() (EditorEvent, bool) {
 // addHistory controls whether this modification is recorded in the undo
 // history. replace can modify text in positions unrelated to the cursor
 // position.
-func (e *Editor) replace(start, end int, s string, addHistory bool, batchIdx int) int {
+func (e *Editor) replace(start, end int, s string) int {
 	length := e.text.Len()
 	if start > end {
 		start, end = end, start
 	}
 	start = min(start, length)
 	end = min(end, length)
-	replaceSize := end - start
-	el := e.Len()
-	var sc int
-	idx := 0
-	for idx < len(s) {
-		if e.MaxLen > 0 && el-replaceSize+sc >= e.MaxLen {
-			s = s[:idx]
-			break
-		}
-		_, n := utf8.DecodeRuneInString(s[idx:])
-		if e.Filter != "" && !strings.Contains(e.Filter, s[idx:idx+n]) {
-			s = s[:idx] + s[idx+n:]
-			continue
-		}
-		idx += n
-		sc++
-	}
 
-	if addHistory {
-		deleted := make([]rune, 0, replaceSize)
-		readPos := e.text.ByteOffset(start)
-		for i := 0; i < replaceSize; i++ {
-			ru, s, _ := e.text.ReadRuneAt(int64(readPos))
-			readPos += int64(s)
-			deleted = append(deleted, ru)
-		}
-		if e.nextHistoryIdx < len(e.history) {
-			e.history = e.history[:e.nextHistoryIdx]
-		}
-		e.history = append(e.history, modification{
-			BatchIdx:       batchIdx,
-			StartRune:      start,
-			ApplyContent:   s,
-			ReverseContent: string(deleted),
-		})
-		e.nextHistoryIdx++
-	}
-
-	sc = e.text.Replace(start, end, s)
+	sc := e.text.Replace(start, end, s)
 	newEnd := start + sc
 	adjust := func(pos int) int {
 		switch {
@@ -581,7 +450,7 @@ func (e *Editor) ReplaceAll(newStr string) int {
 	finalPos := 0
 	for idx := len(e.matches) - 1; idx >= 0; idx-- {
 		start, end := e.matches[idx].Start, e.matches[idx].End
-		e.replace(start, end, newStr, true, idx)
+		e.replace(start, end, newStr)
 		finalPos = start
 	}
 
@@ -641,9 +510,9 @@ func (e *Editor) deleteWord(distance int) (deletedRunes int) {
 		off := e.text.ByteOffset(idx)
 		var r rune
 		if direction < 0 {
-			r, _, _ = e.text.ReadRuneBefore(int64(off))
+			r, _, _ = e.buffer.ReadRuneBefore(int64(off))
 		} else {
-			r, _, _ = e.text.ReadRuneAt(int64(off))
+			r, _, _ = e.buffer.ReadRuneAt(int64(off))
 		}
 		return r
 	}
@@ -696,24 +565,6 @@ func (e *Editor) ClearSelection() {
 	e.text.ClearSelection()
 }
 
-// WriteTo implements io.WriterTo.
-func (e *Editor) WriteTo(w io.Writer) (int64, error) {
-	e.initBuffer()
-	return e.text.WriteTo(w)
-}
-
-// Seek implements io.Seeker.
-func (e *Editor) Seek(offset int64, whence int) (int64, error) {
-	e.initBuffer()
-	return e.text.Seek(offset, whence)
-}
-
-// Read implements io.Reader.
-func (e *Editor) Read(p []byte) (int, error) {
-	e.initBuffer()
-	return e.text.Read(p)
-}
-
 // Regions returns visible regions covering the rune range [start,end).
 func (e *Editor) Regions(start, end int, regions []Region) []Region {
 	e.initBuffer()
@@ -740,10 +591,10 @@ func (e *Editor) UpdateTextStyles(styles []*TextStyle) {
 	e.textStyles = styles
 }
 
-func (e *Editor) VisibleLines() ([]*LineInfo, error) {
-	e.initBuffer()
-	return e.text.VisibleLines()
-}
+// func (e *Editor) VisibleLines() ([]*LineInfo, error) {
+// 	e.initBuffer()
+// 	return e.text.VisibleLines()
+// }
 
 func max(a, b int) int {
 	if a > b {
@@ -779,4 +630,3 @@ func sign(n int) int {
 
 func (s ChangeEvent) isEditorEvent() {}
 func (s SelectEvent) isEditorEvent() {}
-func (s SubmitEvent) isEditorEvent() {}

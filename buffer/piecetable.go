@@ -1,6 +1,10 @@
 package buffer
 
-import "unicode/utf8"
+import (
+	"fmt"
+	"strings"
+	"unicode/utf8"
+)
 
 type bufSrc uint8
 type action uint8
@@ -16,6 +20,8 @@ const (
 	actionErase
 	actionReplace
 )
+
+var debugEnabled = false
 
 // PieceTable implements a piece table data structure.
 // See the following resources for more information:
@@ -128,7 +134,7 @@ func (pt *PieceTable) push2UndoStack(rng, newRng *pieceRange) {
 //  1. Insert in the middle of a piece.
 //  2. Insert at the boundary of two pieces.
 func (pt *PieceTable) Insert(runeIndex int, text string) bool {
-	if runeIndex > pt.seqLength || runeIndex < 0 {
+	if runeIndex > pt.seqLength || runeIndex < 0 || text == "" {
 		return false
 	}
 
@@ -164,6 +170,9 @@ func (pt *PieceTable) tryAppendToLastPiece(runeIndex int, text string) bool {
 	}
 
 	_, _, textRunes := pt.addToBuffer(modify, []byte(text))
+	if textRunes <= 0 {
+		return false
+	}
 
 	pt.lastInsertPiece.length += textRunes
 	pt.lastInsertPiece.byteLength += len(text)
@@ -276,6 +285,10 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) ([]C
 		return rng.cursor
 	}
 
+	defer func() {
+		pt.lineIndex.Rebuild(pt)
+	}()
+
 	cursors := make([]CursorPos, 0)
 	// remove the next event from the source stack
 	rng := src.peek()
@@ -338,13 +351,16 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 			byteOff:    startPiece.byteOff,
 			byteLength: leftByteLen,
 		})
-		newPieces.Append(&piece{
-			source:     startPiece.source,
-			offset:     startPiece.offset + inRuneOff + endOff - startOff,
-			length:     startPiece.length - inRuneOff - (endOff - startOff),
-			byteOff:    rightByteOff,
-			byteLength: rightByteLen,
-		})
+
+		if rightByteLen > 0 {
+			newPieces.Append(&piece{
+				source:     startPiece.source,
+				offset:     startPiece.offset + inRuneOff + endOff - startOff,
+				length:     startPiece.length - inRuneOff - (endOff - startOff),
+				byteOff:    rightByteOff,
+				byteLength: rightByteLen,
+			})
+		}
 		bytesErased += startPiece.byteLength - leftByteLen - rightByteLen
 		pt.push2UndoStack(oldPieces, newPieces)
 		// update line index
@@ -419,12 +435,18 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 
 // Replace removes text from startOff to endOff(exclusive), and insert text at the position of startOff.
 func (pt *PieceTable) Replace(startOff, endOff int, text string) bool {
+	defer pt.Inspect()
+
 	if endOff > pt.seqLength {
 		endOff = pt.seqLength
 	}
 
-	if startOff == endOff {
+	if startOff == endOff && text != "" {
 		return pt.Insert(startOff, text)
+	}
+
+	if text == "" {
+		return pt.Erase(startOff, endOff)
 	}
 
 	pt.GroupOp()
@@ -438,10 +460,12 @@ func (pt *PieceTable) Replace(startOff, endOff int, text string) bool {
 }
 
 func (pt *PieceTable) Undo() ([]CursorPos, bool) {
+	defer pt.Inspect()
 	return pt.undoRedo(pt.undoStack, pt.redoStack)
 }
 
 func (pt *PieceTable) Redo() ([]CursorPos, bool) {
+	defer pt.Inspect()
 	return pt.undoRedo(pt.redoStack, pt.undoStack)
 }
 
@@ -468,4 +492,32 @@ func (pt *PieceTable) Changed() bool {
 	c := pt.changed
 	pt.changed = false
 	return c
+}
+
+// Inspect prints the internal of the piece table. For debug purpose only.
+func (pt *PieceTable) Inspect() {
+	if !debugEnabled {
+		return
+	}
+
+	fmt.Println("<---------------------------------------------------->")
+	fmt.Println("\toriginal buffer size: ", pt.originalBuf.length)
+	fmt.Println("\tmodify buffer size: ", pt.modifyBuf.length)
+	fmt.Println("\ttext sequence size: ", pt.seqLength)
+	fmt.Println("\tpieces: ", pt.pieces.Length())
+	id := 0
+	for n := pt.pieces.Head(); n != pt.pieces.tail; n = n.next {
+		content := string(pt.getBuf(n.source).getTextByRange(n.byteOff, n.byteLength))
+		content = strings.ReplaceAll(content, "\n", "\\n")
+		content = strings.ReplaceAll(content, "\t", "\\t")
+		fmt.Printf("\t\t#%d: source: %d, range:(%d:%d), text: %s\n", id, n.source, n.offset, n.offset+n.length, content)
+		id++
+	}
+	fmt.Printf("\traw modify buffer: %s\n", string(pt.modifyBuf.buf))
+	fmt.Println("<---------------------------------------------------->")
+}
+
+// Set debug mode or not. In debug mode, the internal states of PieceTable is printed to console.
+func SetDebug(enable bool) {
+	debugEnabled = enable
 }

@@ -43,6 +43,7 @@ func (tb *textBuffer) append(buf []byte) (runeOff int, byteOff int, runeLen int)
 	byteOff = len(tb.buf)
 	runeOff = tb.length
 
+	// FIXME: pre-expand the capacity with fixed size length to improve performance.
 	tb.buf = append(tb.buf, buf...)
 	runeLen = utf8.RuneCount(buf)
 	tb.length += runeLen

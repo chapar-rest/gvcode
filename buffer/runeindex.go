@@ -26,7 +26,7 @@ type runeOffIndex struct {
 	offIndex []offsetEntry
 }
 
-// indexOfRune returns the latest rune index and byte offset no later than r.
+// indexOfRune returns the latest rune index and byte offset no later than runeIndex.
 func (r *runeOffIndex) indexOfRune(runeIndex int) offsetEntry {
 	// Initialize index.
 	if len(r.offIndex) == 0 {

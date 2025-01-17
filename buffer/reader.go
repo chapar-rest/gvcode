@@ -84,22 +84,22 @@ func (r *PieceTableReader) Text(buf []byte) []byte {
 	return buf
 }
 
-// RuneOffset returns the byte offset for the rune at position runeIndex.
-func (r *PieceTableReader) RuneOffset(runeIndex int) int {
+// RuneOffset returns the byte offset for the rune at position runeOff.
+func (r *PieceTableReader) RuneOffset(runeOff int) int {
 	if r.seqLength == 0 {
 		return 0
 	}
 
-	if runeIndex >= r.seqLength {
-		return r.seqBytes - 1
+	if runeOff >= r.seqLength {
+		return r.seqBytes
 	}
 
 	var bytes int
 	var runes int
 
 	for n := r.pieces.Head(); n != r.pieces.tail; n = n.next {
-		if runes+n.length > runeIndex {
-			return bytes + r.getBuf(n.source).bytesForRange(n.offset, runeIndex-runes)
+		if runes+n.length > runeOff {
+			return bytes + r.getBuf(n.source).bytesForRange(n.offset, runeOff-runes)
 		}
 
 		bytes += n.byteLength

@@ -25,8 +25,13 @@ type lineOpStack struct {
 	ops []*lineOp
 }
 
-// lineIndex manages a line index for the text sequence using an incremental manner.
-// It also provides its own undo/redo stack.
+// lineIndex manages a line index for the text sequence using a hybrid strategy:
+//  1. update the index when insert or erase occurs in an incremental manner.
+//  2. rebuild the index when undo or redo is triggerred in the PieceTable.
+//
+// It provides its own undo/redo stack for internal undo and redo. But this is hard to
+// align with the undo and redo operation of PieceTable. These two methods may be removed
+// in the feture.
 type lineIndex struct {
 	// Index of the slice saves the continuous line number starting from zero.
 	// The value contains the rune length of the line.
@@ -65,6 +70,8 @@ func (li *lineIndex) UpdateOnDelete(runeIndex int, length int) {
 
 }
 
+// Optional. To make the situation simpler, we use Rebuild to build the
+// entire index from scratch.
 func (li *lineIndex) Undo() {
 	src := li.undo
 	dest := li.redo
@@ -83,6 +90,8 @@ func (li *lineIndex) Undo() {
 	dest.push(op)
 }
 
+// Optional. To make the situation simpler, we use Rebuild to build the
+// entire index from scratch.
 func (li *lineIndex) Redo() {
 	src := li.redo
 	dest := li.undo
@@ -99,6 +108,26 @@ func (li *lineIndex) Redo() {
 	}
 
 	dest.push(op)
+}
+
+func (li *lineIndex) Rebuild(pt *PieceTable) {
+	li.lines = li.lines[:0]
+	for n := pt.pieces.Head(); n != pt.pieces.tail; n = n.next {
+		pieceText := pt.getBuf(n.source).getTextByRange(n.byteOff, n.byteLength)
+		lines := li.parseLine(pieceText)
+		if len(lines) > 0 {
+			if len(li.lines) > 0 {
+				lastLine := li.lines[len(li.lines)-1]
+				if !lastLine.hasLineBreak {
+					// merge with lastLine
+					lines[0].length += lastLine.length
+					li.lines = li.lines[:len(li.lines)-1]
+				}
+			}
+
+			li.lines = append(li.lines, lines...)
+		}
+	}
 }
 
 func (li *lineIndex) applyInsert(runeIndex int, newLines []lineInfo) {
@@ -256,6 +285,13 @@ func (li *lineIndex) applyDelete(runeIndex int, length int) []lineInfo {
 		li.lines = append(li.lines[:i], li.lines[i+1:]...)
 		endIndex--
 		i++
+		if endIndex <= 0 {
+			break
+		}
+	}
+
+	if endIndex <= 0 {
+		return removedLines
 	}
 
 	// Handle the splitting of the ending line

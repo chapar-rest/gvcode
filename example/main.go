@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"log"
 	"os"
 
 	"gioui.org/app"
@@ -48,6 +49,7 @@ func (ed *EditorApp) layout(gtx C) D {
 }
 
 func main() {
+	log.SetFlags(log.Flags() | log.Lshortfile)
 	th := material.NewTheme()
 
 	editorApp := EditorApp{

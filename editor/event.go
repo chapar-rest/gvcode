@@ -5,7 +5,6 @@ import (
 	"io"
 	"math"
 	"strings"
-	"unicode/utf8"
 
 	"gioui.org/gesture"
 	"gioui.org/io/clipboard"
@@ -50,38 +49,22 @@ func (e *Editor) processEvents(gtx layout.Context) (ev EditorEvent, ok bool) {
 func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 	sbounds := e.text.ScrollBounds()
 	var smin, smax int
-	var axis gesture.Axis
-	if e.SingleLine {
-		axis = gesture.Horizontal
-		smin, smax = sbounds.Min.X, sbounds.Max.X
-	} else {
-		axis = gesture.Vertical
-		smin, smax = sbounds.Min.Y, sbounds.Max.Y
-	}
+
+	axis := gesture.Vertical
+	smin, smax = sbounds.Min.Y, sbounds.Max.Y
 
 	var scrollX, scrollY pointer.ScrollRange
 	textDims := e.text.FullDimensions()
 	visibleDims := e.text.Dimensions()
 
-	if e.SingleLine {
-		scrollOffX := e.text.ScrollOff().X
-		scrollX.Min = min(-scrollOffX, 0)
-		scrollX.Max = max(0, textDims.Size.X-(scrollOffX+visibleDims.Size.X))
-	} else {
-		scrollOffY := e.text.ScrollOff().Y
-		scrollY.Min = -scrollOffY
-		scrollY.Max = max(0, textDims.Size.Y-(scrollOffY+visibleDims.Size.Y))
-	}
+	scrollOffY := e.text.ScrollOff().Y
+	scrollY.Min = -scrollOffY
+	scrollY.Max = max(0, textDims.Size.Y-(scrollOffY+visibleDims.Size.Y))
 
 	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, axis, scrollX, scrollY)
 	var soff int
-	if e.SingleLine {
-		e.text.ScrollRel(sdist, 0)
-		soff = e.text.ScrollOff().X
-	} else {
-		e.text.ScrollRel(0, sdist)
-		soff = e.text.ScrollOff().Y
-	}
+	e.text.ScrollRel(0, sdist)
+	soff = e.text.ScrollOff().Y
 
 	for {
 		evt, ok := e.clicker.Update(gtx.Source)
@@ -221,8 +204,7 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 		condFilter(!atEnd, key.Filter{Focus: e, Name: key.NameRightArrow, Optional: key.ModShortcutAlt | key.ModShift}),
 		condFilter(!atEnd, key.Filter{Focus: e, Name: key.NameDownArrow, Optional: key.ModShortcutAlt | key.ModShift}),
 	}
-	// adjust keeps track of runes dropped because of MaxLen.
-	var adjust int
+
 	for {
 		ke, ok := gtx.Event(filters...)
 		if !ok {
@@ -240,14 +222,6 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 			if !gtx.Focused(e) || ke.State != key.Press {
 				break
 			}
-			if !e.ReadOnly && e.Submit && (ke.Name == key.NameReturn || ke.Name == key.NameEnter) {
-				if !ke.Modifiers.Contain(key.ModShift) {
-					e.scratch = e.text.Text(e.scratch)
-					return SubmitEvent{
-						Text: string(e.scratch),
-					}, true
-				}
-			}
 			e.scrollCaret = true
 			e.scroller.Stop()
 			ev, ok := e.command(gtx, ke)
@@ -262,34 +236,9 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 			}
 			e.scrollCaret = true
 			e.scroller.Stop()
-			s := ke.Text
-			moves := 0
-			submit := false
-			switch {
-			case e.Submit:
-				if i := strings.IndexByte(s, '\n'); i != -1 {
-					submit = true
-					moves += len(s) - i
-					s = s[:i]
-				}
-			case e.SingleLine:
-				s = strings.ReplaceAll(s, "\n", " ")
-			}
-			moves += e.replace(ke.Range.Start, ke.Range.End, s, true, 0)
-			adjust += utf8.RuneCountInString(ke.Text) - moves
+			e.replace(ke.Range.Start, ke.Range.End, ke.Text)
 			// Reset caret xoff.
 			e.text.MoveCaret(0, 0)
-			if submit {
-				e.scratch = e.text.Text(e.scratch)
-				submitEvent := SubmitEvent{
-					Text: string(e.scratch),
-				}
-				if e.text.Changed() {
-					e.pending = append(e.pending, submitEvent)
-					return ChangeEvent{}, true
-				}
-				return submitEvent, true
-			}
 		// Complete a paste event, initiated by Shortcut-V in Editor.command().
 		case transfer.DataEvent:
 			e.scrollCaret = true
@@ -303,9 +252,6 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 		case key.SelectionEvent:
 			e.scrollCaret = true
 			e.scroller.Stop()
-			ke.Start -= adjust
-			ke.End -= adjust
-			adjust = 0
 			e.text.SetCaret(ke.Start, ke.End)
 		}
 	}
@@ -459,7 +405,8 @@ func (e *Editor) updateSnippet(gtx layout.Context, start, end int) {
 		e.ime.scratch = make([]byte, n)
 	}
 	scratch := e.ime.scratch[:n]
-	read, _ := e.text.ReadAt(scratch, startOff)
+	read, _ := e.buffer.ReadAt(scratch, startOff)
+
 	if read != len(scratch) {
 		panic("e.rr.Read truncated data")
 	}

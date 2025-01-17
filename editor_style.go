@@ -3,7 +3,6 @@
 package gvcode
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 
@@ -172,9 +171,6 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	dims = layout.Flex{
 		Axis: layout.Horizontal,
 	}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return e.lineBar.Layout(gtx, e.Editor)
-		}),
 
 		layout.Rigid(layout.Spacer{Width: e.lineBar.padding}.Layout),
 
@@ -186,55 +182,6 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 			return d
 		}),
 	)
-
-	return dims
-}
-
-func (bar lineNumberBar) layoutLine(gtx layout.Context, pos *editor.LineInfo, textColor op.CallOp) layout.Dimensions {
-	stack := op.Offset(image.Point{Y: pos.YOffset}).Push(gtx.Ops)
-
-	tl := widget.Label{
-		Alignment:       text.End,
-		MaxLines:        1,
-		LineHeight:      bar.lineHeight,
-		LineHeightScale: bar.lineHeightScale,
-	}
-
-	d := tl.Layout(gtx, bar.shaper,
-		font.Font{Typeface: bar.typeFace, Weight: font.Normal},
-		bar.textSize,
-		fmt.Sprintf("%d", pos.LineNum),
-		textColor)
-	stack.Pop()
-	return d
-}
-
-func (bar lineNumberBar) Layout(gtx layout.Context, e *editor.Editor) layout.Dimensions {
-	dims := layout.Dimensions{Size: image.Point{X: gtx.Constraints.Min.X}}
-
-	textColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: bar.color}.Add(gtx.Ops)
-	textColor := textColorMacro.Stop()
-
-	fake := gtx
-	fake.Ops = &op.Ops{}
-
-	positions, _ := e.VisibleLines()
-	maxWidth := 0
-	{
-		for _, pos := range positions {
-			d := bar.layoutLine(fake, pos, textColor)
-			maxWidth = max(maxWidth, d.Size.X)
-		}
-
-	}
-
-	gtx.Constraints.Max.X = maxWidth
-	gtx.Constraints.Min.X = gtx.Constraints.Max.X
-	for _, pos := range positions {
-		d := bar.layoutLine(gtx, pos, textColor)
-		dims.Size = image.Point{X: maxWidth, Y: dims.Size.Y + d.Size.Y}
-	}
 
 	return dims
 }
