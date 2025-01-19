@@ -3,7 +3,6 @@ package editor
 
 import (
 	"image"
-	"log"
 	"time"
 	"unicode"
 
@@ -141,7 +140,6 @@ func (e *Editor) initBuffer() {
 	e.text.LineHeight = e.LineHeight
 	e.text.LineHeightScale = e.LineHeightScale
 	e.text.WrapPolicy = e.WrapPolicy
-	buffer.SetDebug(true)
 }
 
 // Update the state of the editor in response to input events. Update consumes editor
@@ -184,11 +182,6 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 		}
 	}
 
-	e.text.Layout(gtx, lt, font, size)
-	return e.layout(gtx, textMaterial, selectMaterial, lineMaterial, matchMaterial)
-}
-
-func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, matchMaterial op.CallOp) layout.Dimensions {
 	// Adjust scrolling for new viewport and layout.
 	e.text.ScrollRel(0, 0)
 
@@ -196,6 +189,36 @@ func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.Call
 		e.scrollCaret = false
 		e.text.ScrollToCaret()
 	}
+	// visibleDims := e.text.Dimensions()
+
+	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
+	e.scroller.Add(gtx.Ops)
+
+	return layout.Flex{
+		Axis: layout.Horizontal,
+	}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return e.text.PaintLineNumber(gtx, lt, textMaterial)
+		}),
+
+		layout.Rigid(layout.Spacer{Width: unit.Dp(24)}.Layout),
+
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			e.text.Layout(gtx, lt, font, size)
+			return e.layout(gtx, textMaterial, selectMaterial, lineMaterial, matchMaterial)
+		}),
+	)
+
+}
+
+func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, matchMaterial op.CallOp) layout.Dimensions {
+	// // Adjust scrolling for new viewport and layout.
+	// e.text.ScrollRel(0, 0)
+
+	// if e.scrollCaret {
+	// 	e.scrollCaret = false
+	// 	e.text.ScrollToCaret()
+	// }
 	// visibleDims := e.text.Dimensions()
 
 	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
@@ -353,7 +376,6 @@ func (e *Editor) Insert(s string) (insertedRunes int) {
 	e.initBuffer()
 
 	start, end := e.text.Selection()
-	log.Println("selection: ", start, end)
 	moves := e.replace(start, end, s)
 	if end < start {
 		start = end

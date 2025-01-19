@@ -1,6 +1,6 @@
 module github.com/oligo/gvcode
 
-go 1.23.1
+go 1.23
 
 require (
 	gioui.org v0.8.0

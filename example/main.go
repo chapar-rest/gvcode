@@ -12,6 +12,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode"
+	"github.com/oligo/gvcode/buffer"
 	"github.com/oligo/gvcode/editor"
 )
 
@@ -45,7 +46,10 @@ func (ed *EditorApp) run() error {
 }
 
 func (ed *EditorApp) layout(gtx C) D {
-	return gvcode.NewEditor(ed.state, ed.conf, "").Layout(gtx)
+	return layout.Inset{Top: unit.Dp(6), Bottom: unit.Dp(6)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return gvcode.NewEditor(ed.state, ed.conf, "start typing").Layout(gtx)
+
+	})
 }
 
 func main() {
@@ -57,13 +61,15 @@ func main() {
 		th:     th,
 	}
 
+	buffer.SetDebug(false)
+
 	editorApp.conf = &gvcode.EditorConf{
 		Shaper:             th.Shaper,
 		TextColor:          th.Fg,
 		Bg:                 th.Bg,
 		SelectionColor:     th.ContrastBg,
 		TypeFace:           font.Typeface("monospace"),
-		TextSize:           unit.Sp(14),
+		TextSize:           unit.Sp(18),
 		Weight:             font.Normal,
 		LineHeightScale:    1.5,
 		ShowLineNum:        true,

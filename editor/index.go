@@ -27,9 +27,11 @@ type glyphIndex struct {
 	glyphs []text.Glyph
 	// positions contain all possible caret positions, sorted by rune index.
 	positions []combinedPos
-	// lines contains metadata about the size and position of each line of
-	// text.
-	lines []lineInfo
+	// screenLines contains metadata about the size and position of each line of
+	// text on the screen.
+	screenLines []lineInfo
+	// lineOffsets contain all line y offsets in the document coordinates.
+	lineOffsets []int32
 
 	// currentLineMin and currentLineMax track the dimensions of the line
 	// that is being indexed.
@@ -55,7 +57,9 @@ type glyphIndex struct {
 func (g *glyphIndex) reset() {
 	g.glyphs = g.glyphs[:0]
 	g.positions = g.positions[:0]
-	g.lines = g.lines[:0]
+	g.screenLines = g.screenLines[:0]
+	g.lineOffsets = g.lineOffsets[:0]
+	g.lineOffsets = append(g.lineOffsets, 0)
 	g.currentLineMin = 0
 	g.currentLineMax = 0
 	g.currentLineGlyphs = 0
@@ -128,6 +132,9 @@ func (g *glyphIndex) insertPosition(pos combinedPos) {
 
 // Glyph indexes the provided glyph, generating text cursor positions for it.
 func (g *glyphIndex) Glyph(gl text.Glyph) {
+	if len(g.glyphs) <= 0 {
+		g.lineOffsets[0] = gl.Y
+	}
 	g.glyphs = append(g.glyphs, gl)
 	g.currentLineGlyphs++
 	if len(g.positions) == 0 {
@@ -145,6 +152,7 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 	needsNewLine := gl.Flags&text.FlagLineBreak != 0
 	needsNewRun := gl.Flags&text.FlagRunBreak != 0
 	breaksParagraph := gl.Flags&text.FlagParagraphBreak != 0
+	startParagraph := gl.Flags&text.FlagParagraphStart != 0
 	breaksCluster := gl.Flags&text.FlagClusterBreak != 0
 	// We should insert new positions if the glyph we're processing terminates
 	// a glyph cluster, has nonzero runes, and is not a hard newline.
@@ -166,6 +174,10 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 	}
 
 	g.midCluster = !breaksCluster
+
+	if startParagraph {
+		g.lineOffsets = append(g.lineOffsets, gl.Y)
+	}
 
 	if breaksParagraph {
 		// Paragraph breaking clusters shouldn't have positions generated for both
@@ -213,7 +225,7 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 		g.pos.runIndex++
 	}
 	if needsNewLine {
-		g.lines = append(g.lines, lineInfo{
+		g.screenLines = append(g.screenLines, lineInfo{
 			xOff:    g.currentLineMin,
 			yOff:    int(gl.Y),
 			width:   g.currentLineMax - g.currentLineMin,
@@ -360,7 +372,7 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 	caretStart, _ := g.closestToRune(startRune)
 	caretEnd, _ := g.closestToRune(endRune)
 
-	for lineIdx := caretStart.lineCol.line; lineIdx < len(g.lines); lineIdx++ {
+	for lineIdx := caretStart.lineCol.line; lineIdx < len(g.screenLines); lineIdx++ {
 		if lineIdx > caretEnd.lineCol.line {
 			break
 		}
@@ -371,7 +383,7 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 		if int(pos.y)-pos.ascent.Ceil() > viewport.Max.Y {
 			break
 		}
-		line := g.lines[lineIdx]
+		line := g.screenLines[lineIdx]
 		if lineIdx > caretStart.lineCol.line && lineIdx < caretEnd.lineCol.line {
 			startX := line.xOff
 			endX := startX + line.width

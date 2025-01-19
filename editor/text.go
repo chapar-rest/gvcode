@@ -35,24 +35,24 @@ type textView struct {
 	LineHeightScale float32
 	// WrapPolicy configures how displayed text will be broken into lines.
 	WrapPolicy text.WrapPolicy
+	// LineNumber configures whether to display line number or not.
+	LineNumber bool
+	// LineNumberPadding set the padding between the line number the main text area.
+	LineNumberPadding unit.Dp
 
 	params text.Parameters
 	shaper *text.Shaper
 	rr     buffer.TextSource
-	// maskReader maskReader
 	// graphemes tracks the indices of grapheme cluster boundaries within rr.
 	graphemes []int
 	// paragraphReader is used to populate graphemes.
 	paragraphReader graphemeReader
-	// lastMask        rune
-	viewSize image.Point
-	valid    bool
-	regions  []Region
-	dims     layout.Dimensions
-
-	index glyphIndex
-
-	caret struct {
+	viewSize        image.Point
+	valid           bool
+	regions         []Region
+	dims            layout.Dimensions
+	index           glyphIndex
+	caret           struct {
 		// xoff is the offset to the current position when moving between lines.
 		xoff fixed.Int26_6
 		// start is the current caret position in runes, and also the start position of
@@ -181,6 +181,8 @@ func (e *textView) calculateViewSize(gtx layout.Context) image.Point {
 
 // Layout the text, reshaping it as necessary.
 func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp) {
+	e.params.DisableSpaceTrim = true
+
 	if e.params.Locale != gtx.Locale {
 		e.params.Locale = gtx.Locale
 		e.invalidate()
@@ -284,6 +286,24 @@ func (e *textView) paintMatches(gtx layout.Context, matches []MatchRange, materi
 	}
 }
 
+func (e *textView) PaintLineNumber(gtx layout.Context, lt *text.Shaper, material op.CallOp) layout.Dimensions {
+	m := op.Record(gtx.Ops)
+	viewport := image.Rectangle{
+		Min: e.scrollOff,
+		Max: e.viewSize.Add(e.scrollOff),
+	}
+
+	dims := paintLineNumber(gtx, lt, e.params, viewport, e.index.lineOffsets, material)
+	call := m.Stop()
+
+	rect := viewport.Sub(e.scrollOff)
+	rect.Max.X = dims.Size.X
+	defer clip.Rect(rect).Push(gtx.Ops).Pop()
+	call.Add(gtx.Ops)
+
+	return dims
+}
+
 // PaintText clips and paints the visible text glyph outlines using the provided
 // material to fill the glyphs.
 func (e *textView) PaintText(gtx layout.Context, material op.CallOp, textStyles []*TextStyle) {
@@ -297,7 +317,7 @@ func (e *textView) PaintText(gtx layout.Context, material op.CallOp, textStyles 
 	}
 
 	startGlyph := 0
-	for _, line := range e.index.lines {
+	for _, line := range e.index.screenLines {
 		if line.descent.Ceil()+line.yOff >= viewport.Min.Y {
 			break
 		}
