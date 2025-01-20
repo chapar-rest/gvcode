@@ -5,6 +5,7 @@ import (
 	"image"
 	"io"
 	"math"
+	"sort"
 	"unicode"
 	"unicode/utf8"
 
@@ -136,18 +137,6 @@ func (e *textView) closestToXYGraphemes(x fixed.Int26_6, y int) combinedPos {
 	}
 }
 
-// caretCurrentLine returns the current logical line that the carent is in.
-// Only the start position is checked.
-// func (e *textView) caretCurrentLine() (start combinedPos, end combinedPos) {
-// 	caretStart := e.closestToRune(e.caret.start)
-
-// 	linePos := e.searchForLineRange(caretStart.lineCol.line)
-
-// 	start = linePos[0]
-// 	end = linePos[1]
-// 	return
-// }
-
 func absFixed(i fixed.Int26_6) fixed.Int26_6 {
 	if i < 0 {
 		return -i
@@ -243,33 +232,66 @@ func (e *textView) PaintSelection(gtx layout.Context, material op.CallOp) {
 	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
 	e.regions = e.index.locate(docViewport, e.caret.start, e.caret.end, e.regions)
 	for _, region := range e.regions {
-		area := clip.Rect(region.Bounds).Push(gtx.Ops)
+		area := clip.Rect(adjustUseLeading(e.calcLineHeight(), region.Bounds)).Push(gtx.Ops)
 		material.Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 		area.Pop()
 	}
 }
 
+// calculate line height. Maybe there's a better way?
+func (e *textView) calcLineHeight() float32 {
+	lineHeight := e.params.LineHeight
+	// align with how text.Shaper handles default value of e.params.LineHeight.
+	if lineHeight == 0 {
+		lineHeight = e.params.PxPerEm
+	}
+	lineHeightScale := e.params.LineHeightScale
+	// align with how text.Shaper handles default value of e.params.LineHeightScale.
+	if lineHeightScale == 0 {
+		lineHeightScale = 1.2
+	}
+
+	return float32(lineHeight.Round()) * lineHeightScale
+}
+
+// caretCurrentLine returns the current logical line that the carent is in.
+// Only the start position is checked.
+func (e *textView) caretCurrentLine() (start combinedPos, end combinedPos) {
+	caretStart := e.closestToRune(e.caret.start)
+
+	lineIdx := sort.Search(len(e.index.lineRanges), func(i int) bool {
+		rng := e.index.lineRanges[i]
+		return rng.startY >= caretStart.y
+	})
+
+	line := e.index.lineRanges[lineIdx]
+	start = e.closestToXY(line.startX, line.startY)
+	end = e.closestToXY(line.endX, line.endY)
+
+	return
+}
+
 // paintLineHighlight clips and paints the visible line that the caret is in when there is no
 // text selected.
-// func (e *textView) paintLineHighlight(gtx layout.Context, material op.CallOp) {
-// 	if e.caret.start != e.caret.end {
-// 		return
-// 	}
+func (e *textView) paintLineHighlight(gtx layout.Context, material op.CallOp) {
+	if e.caret.start != e.caret.end {
+		return
+	}
 
-// 	start, end := e.caretCurrentLine()
-// 	if start == (combinedPos{}) || end == (combinedPos{}) {
-// 		return
-// 	}
+	start, end := e.caretCurrentLine()
+	if start == (combinedPos{}) || end == (combinedPos{}) {
+		return
+	}
 
-// 	bounds := image.Rectangle{Min: image.Point{X: 0, Y: start.y - start.ascent.Ceil()},
-// 		Max: image.Point{X: gtx.Constraints.Max.X, Y: end.y + end.descent.Ceil()}}.Sub(e.scrollOff)
+	bounds := image.Rectangle{Min: image.Point{X: 0, Y: start.y - start.ascent.Ceil()},
+		Max: image.Point{X: gtx.Constraints.Max.X, Y: end.y + end.descent.Ceil()}}.Sub(e.scrollOff)
 
-// 	area := clip.Rect(bounds).Push(gtx.Ops)
-// 	material.Add(gtx.Ops)
-// 	paint.PaintOp{}.Add(gtx.Ops)
-// 	area.Pop()
-// }
+	area := clip.Rect(adjustUseLeading(e.calcLineHeight(), bounds)).Push(gtx.Ops)
+	material.Add(gtx.Ops)
+	paint.PaintOp{}.Add(gtx.Ops)
+	area.Pop()
+}
 
 func (e *textView) paintMatches(gtx layout.Context, matches []MatchRange, material op.CallOp) {
 	localViewport := image.Rectangle{Max: e.viewSize}
@@ -278,7 +300,7 @@ func (e *textView) paintMatches(gtx layout.Context, matches []MatchRange, materi
 	for _, match := range matches {
 		e.regions = e.index.locate(docViewport, match.Start, match.End, e.regions)
 		for _, region := range e.regions {
-			area := clip.Rect(region.Bounds).Push(gtx.Ops)
+			area := clip.Rect(adjustUseLeading(e.calcLineHeight(), region.Bounds)).Push(gtx.Ops)
 			material.Add(gtx.Ops)
 			paint.PaintOp{}.Add(gtx.Ops)
 			area.Pop()
@@ -293,7 +315,7 @@ func (e *textView) PaintLineNumber(gtx layout.Context, lt *text.Shaper, material
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
-	dims := paintLineNumber(gtx, lt, e.params, viewport, e.index.lineOffsets, material)
+	dims := paintLineNumber(gtx, lt, e.params, viewport, e.index.lineRanges, material)
 	call := m.Stop()
 
 	rect := viewport.Sub(e.scrollOff)
@@ -359,7 +381,7 @@ func (e *textView) PaintCaret(gtx layout.Context, material op.CallOp) {
 	cl := image.Rectangle{Max: e.viewSize}
 	carRect = cl.Intersect(carRect)
 	if !carRect.Empty() {
-		defer clip.Rect(carRect).Push(gtx.Ops).Pop()
+		defer clip.Rect(adjustUseLeading(e.calcLineHeight(), carRect)).Push(gtx.Ops).Pop()
 		material.Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 	}
@@ -746,4 +768,13 @@ func (e *textView) Regions(start, end int, regions []Region) []Region {
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 	return e.index.locate(viewport, start, end, regions)
+}
+
+func adjustUseLeading(lineHeight float32, bounds image.Rectangle) image.Rectangle {
+	leading := lineHeight - float32(bounds.Dy())
+	adjust := leading / 2.0
+
+	bounds.Min.Y -= int(math.Round(float64(adjust)))
+	bounds.Max.Y += int(math.Round(float64(adjust)))
+	return bounds
 }

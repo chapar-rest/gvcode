@@ -281,7 +281,7 @@ func (e *Editor) paintCaret(gtx layout.Context, material op.CallOp) {
 
 func (e *Editor) paintLineHighlight(gtx layout.Context, material op.CallOp) {
 	e.initBuffer()
-	//e.text.paintLineHighlight(gtx, material)
+	e.text.paintLineHighlight(gtx, material)
 }
 
 // SetMatches sets the matched text ranges after a find operation.

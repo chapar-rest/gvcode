@@ -14,12 +14,22 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
+// screen line info
 type lineInfo struct {
 	xOff            fixed.Int26_6
 	yOff            int
 	width           fixed.Int26_6
 	ascent, descent fixed.Int26_6
 	glyphs          int
+}
+
+// lineRange contains the pixel coordinates of the start and end position
+// of the logical line range.
+type lineRange struct {
+	startX fixed.Int26_6
+	startY int
+	endX   fixed.Int26_6
+	endY   int
 }
 
 type glyphIndex struct {
@@ -30,8 +40,8 @@ type glyphIndex struct {
 	// screenLines contains metadata about the size and position of each line of
 	// text on the screen.
 	screenLines []lineInfo
-	// lineOffsets contain all line y offsets in the document coordinates.
-	lineOffsets []int32
+	// lineRanges contain all line pixel coordinates in the document coordinates.
+	lineRanges []lineRange
 
 	// currentLineMin and currentLineMax track the dimensions of the line
 	// that is being indexed.
@@ -58,8 +68,8 @@ func (g *glyphIndex) reset() {
 	g.glyphs = g.glyphs[:0]
 	g.positions = g.positions[:0]
 	g.screenLines = g.screenLines[:0]
-	g.lineOffsets = g.lineOffsets[:0]
-	g.lineOffsets = append(g.lineOffsets, 0)
+	g.lineRanges = g.lineRanges[:0]
+	g.lineRanges = append(g.lineRanges, lineRange{})
 	g.currentLineMin = 0
 	g.currentLineMax = 0
 	g.currentLineGlyphs = 0
@@ -133,7 +143,7 @@ func (g *glyphIndex) insertPosition(pos combinedPos) {
 // Glyph indexes the provided glyph, generating text cursor positions for it.
 func (g *glyphIndex) Glyph(gl text.Glyph) {
 	if len(g.glyphs) <= 0 {
-		g.lineOffsets[0] = gl.Y
+		g.lineRanges[0] = newLineRange(gl)
 	}
 	g.glyphs = append(g.glyphs, gl)
 	g.currentLineGlyphs++
@@ -176,7 +186,12 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 	g.midCluster = !breaksCluster
 
 	if startParagraph {
-		g.lineOffsets = append(g.lineOffsets, gl.Y)
+		g.lineRanges = append(g.lineRanges, newLineRange(gl))
+	} else {
+		// the line may not have a line break, so we update the end of the logical line range on
+		// each coming glyph
+		g.lineRanges[len(g.lineRanges)-1].endX = gl.X
+		g.lineRanges[len(g.lineRanges)-1].endY = int(gl.Y)
 	}
 
 	if breaksParagraph {
@@ -328,6 +343,10 @@ func (g *glyphIndex) closestToXY(x fixed.Int26_6, y int) combinedPos {
 		}
 	}
 	return g.positions[closest]
+}
+
+func newLineRange(gl text.Glyph) lineRange {
+	return lineRange{startX: gl.X, startY: int(gl.Y), endX: gl.X, endY: int(gl.Y)}
 }
 
 // makeRegion creates a text-aligned rectangle from start to end. The vertical

@@ -12,18 +12,19 @@ import (
 	"gioui.org/text"
 )
 
-func paintLineNumber(gtx layout.Context, shaper *text.Shaper, params text.Parameters, viewport image.Rectangle, lines []int32, textMaterial op.CallOp) layout.Dimensions {
+func paintLineNumber(gtx layout.Context, shaper *text.Shaper, params text.Parameters, viewport image.Rectangle, lines []lineRange, textMaterial op.CallOp) layout.Dimensions {
 	// inherit all other settings from the main text layout.
 	params.Alignment = text.End
 	params.MinWidth = gtx.Constraints.Min.X
 	params.MaxWidth = gtx.Constraints.Max.X
+	params.MaxLines = 1
 
 	var dims layout.Dimensions
 	glyphs := make([]text.Glyph, 5)
 
 	quit := false
 lineLoop:
-	for i, yOffset := range lines {
+	for i, line := range lines {
 		if quit {
 			break
 		}
@@ -43,9 +44,9 @@ lineLoop:
 				break
 			}
 
-			if int(yOffset)+g.Descent.Ceil() < viewport.Min.Y {
+			if int(line.startY)+g.Descent.Ceil() < viewport.Min.Y {
 				break
-			} else if int(yOffset)-g.Ascent.Ceil() > viewport.Max.Y {
+			} else if int(line.startY)-g.Ascent.Ceil() > viewport.Max.Y {
 				quit = true
 				goto lineLoop
 			}
@@ -63,9 +64,10 @@ lineLoop:
 			continue
 		}
 
+		//log.Println("line glyphs and width: ", i+1, bounds.Dx(), len(glyphs))
 		dims.Size = image.Point{X: max(bounds.Dx(), dims.Size.X), Y: dims.Size.Y + bounds.Dy()}
 
-		trans := op.Affine(f32.Affine2D{}.Offset(f32.Point{Y: float32(yOffset)}.Sub(layout.FPt(viewport.Min)))).Push(gtx.Ops)
+		trans := op.Affine(f32.Affine2D{}.Offset(f32.Point{Y: float32(line.startY)}.Sub(layout.FPt(viewport.Min)))).Push(gtx.Ops)
 
 		// draw glyph
 		path := shaper.Shape(glyphs)
@@ -76,6 +78,6 @@ lineLoop:
 		trans.Pop()
 	}
 
-	dims.Size = gtx.Constraints.Constrain(dims.Size)
+	//dims.Size = gtx.Constraints.Constrain(dims.Size)
 	return dims
 }
