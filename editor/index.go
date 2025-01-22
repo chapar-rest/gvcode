@@ -24,7 +24,7 @@ type lineInfo struct {
 }
 
 // lineRange contains the pixel coordinates of the start and end position
-// of the logical line range.
+// of the logical line.
 type lineRange struct {
 	startX fixed.Int26_6
 	startY int
