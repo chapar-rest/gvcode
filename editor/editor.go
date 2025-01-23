@@ -1,4 +1,7 @@
 // This file is based on the Editor part of package gioui.org/widget.
+//
+// Copyright (c) 2018-2025 Elias Naur and Gio contributors
+
 package editor
 
 import (
@@ -34,28 +37,27 @@ type Editor struct {
 	// LineHeightScale is multiplied by LineHeight to determine the final gap
 	// between baselines. If zero, a sensible default will be used.
 	LineHeightScale float32
-
+	// WrapPolicy configures how displayed text will be broken into lines.
+	WrapPolicy text.WrapPolicy
 	// ReadOnly controls whether the contents of the editor can be altered by
 	// user interaction. If set to true, the editor will allow selecting text
 	// and copying it interactively, but not modifying it.
 	ReadOnly bool
-
 	// InputHint specifies the type of on-screen keyboard to be displayed.
 	InputHint key.InputHint
-	// MaxLen limits the editor content to a maximum length. Zero means no limit.
-	MaxLen int
-	// WrapPolicy configures how displayed text will be broken into lines.
-	WrapPolicy text.WrapPolicy
 
 	buffer     buffer.TextSource
 	textStyles []*TextStyle
 	// Match ranges in rune offset, for text search.
-	matches []MatchRange
-	// Index of the current [MatchRange].
+	matches []TextRange
+	// Index of the current [TextRange].
 	currentMatch int
 	// scratch is a byte buffer that is reused to efficiently read portions of text
 	// from the textView.
-	scratch    []byte
+	scratch []byte
+	// regions is a region buffer for text hightlighting purpose.
+	regions []Region
+
 	blinkStart time.Time
 
 	// ime tracks the state relevant to input methods.
@@ -84,19 +86,8 @@ type imeState struct {
 
 type selectionAction int
 
-type LineInfo struct {
-	// line number starting from 1.
-	LineNum int
-	// offset in the cross axis.
-	YOffset int
-	// offset of the start rune the line.
-	Start int
-	// offset of the end rune the line.
-	End int
-}
-
-// Matched substring range.
-type MatchRange struct {
+// Text range used for search or any other purposes.
+type TextRange struct {
 	// offset of the start rune the match.
 	Start int
 	// offset of the end rune the match.
@@ -174,7 +165,8 @@ func (e *Editor) Update(gtx layout.Context) (EditorEvent, bool) {
 // Layout lays out the editor using the provided textMaterial as the paint material
 // for the text glyphs+caret and the selectMaterial as the paint material for the
 // selection rectangle.
-func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp, textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, matchMaterial op.CallOp) layout.Dimensions {
+func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp,
+	textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, matchMaterial op.CallOp, lineNumberMaterial op.CallOp) layout.Dimensions {
 	for {
 		_, ok := e.Update(gtx)
 		if !ok {
@@ -198,7 +190,7 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 		Axis: layout.Horizontal,
 	}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return e.text.PaintLineNumber(gtx, lt, textMaterial)
+			return e.text.PaintLineNumber(gtx, lt, lineNumberMaterial)
 		}),
 
 		layout.Rigid(layout.Spacer{Width: unit.Dp(24)}.Layout),
@@ -211,16 +203,7 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 
 }
 
-func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, matchMaterial op.CallOp) layout.Dimensions {
-	// // Adjust scrolling for new viewport and layout.
-	// e.text.ScrollRel(0, 0)
-
-	// if e.scrollCaret {
-	// 	e.scrollCaret = false
-	// 	e.text.ScrollToCaret()
-	// }
-	// visibleDims := e.text.Dimensions()
-
+func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, rangeMaterial op.CallOp) layout.Dimensions {
 	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
 	pointer.CursorText.Add(gtx.Ops)
 	event.Op(gtx.Ops, e)
@@ -245,7 +228,7 @@ func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.Call
 	semantic.Editor.Add(gtx.Ops)
 	if e.Len() > 0 {
 		e.paintSelection(gtx, selectMaterial)
-		e.paintMatches(gtx, matchMaterial)
+		e.paintTextRanges(gtx, rangeMaterial)
 		e.paintLineHighlight(gtx, lineMaterial)
 		e.paintText(gtx, textMaterial)
 	}
@@ -285,7 +268,7 @@ func (e *Editor) paintLineHighlight(gtx layout.Context, material op.CallOp) {
 }
 
 // SetMatches sets the matched text ranges after a find operation.
-func (e *Editor) SetMatches(matches []MatchRange) {
+func (e *Editor) SetMatches(matches []TextRange) {
 	e.matches = matches
 	e.ClearSelection()
 	if len(matches) > 0 {
@@ -293,13 +276,18 @@ func (e *Editor) SetMatches(matches []MatchRange) {
 	}
 }
 
-func (e *Editor) paintMatches(gtx layout.Context, material op.CallOp) {
+func (e *Editor) paintTextRanges(gtx layout.Context, material op.CallOp) {
 	e.initBuffer()
-	e.text.paintMatches(gtx, e.matches, material)
 
+	e.regions = e.regions[:0]
+	for _, match := range e.matches {
+		e.regions = append(e.regions, e.text.Regions(match.Start, match.End, e.regions)...)
+	}
+
+	e.text.PaintRegions(gtx, e.regions, material)
 }
 
-// NextMatch is used to switch between the [MatchRange]s. This also selects the next match and causes
+// NextMatch is used to switch between the [TextRange]s. This also selects the next match and causes
 // the selection background drawn under the matched text.
 func (e *Editor) NextMatch(index int) {
 	if index < 0 || index >= len(e.matches) {
@@ -458,7 +446,7 @@ func (e *Editor) replace(start, end int, s string) int {
 }
 
 // ReplaceAll assumes a context of "Find & Replace". newStr applies
-// to a list of text [MatchRange], and the matched text is replaced
+// to a list of text [TextRange], and the matched text is replaced
 // with newStr one by one. The number of replacement is saved to be
 // used during undo/redo.
 // It returns the number of occurrences replaced.
@@ -612,11 +600,6 @@ func (e *Editor) ScrollByRatio(gtx layout.Context, ratio float32) {
 func (e *Editor) UpdateTextStyles(styles []*TextStyle) {
 	e.textStyles = styles
 }
-
-// func (e *Editor) VisibleLines() ([]*LineInfo, error) {
-// 	e.initBuffer()
-// 	return e.text.VisibleLines()
-// }
 
 func max(a, b int) int {
 	if a > b {

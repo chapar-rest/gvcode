@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"image"
 	"io"
-	"log"
 	"math"
 	"sort"
 
@@ -98,7 +97,21 @@ func (e *textView) PaintSelection(gtx layout.Context, material op.CallOp) {
 	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
 	e.regions = e.index.locate(docViewport, e.caret.start, e.caret.end, e.regions)
 	for _, region := range e.regions {
-		area := clip.Rect(adjustUseLeading(e.calcLineHeight(), region.Bounds)).Push(gtx.Ops)
+		area := clip.Rect(e.adjustPadding(region.Bounds)).Push(gtx.Ops)
+		material.Add(gtx.Ops)
+		paint.PaintOp{}.Add(gtx.Ops)
+		area.Pop()
+	}
+}
+
+// paintRegions clips and paints the visible text rectangles using
+// the provided material to fill the rectangles. Regions passed in should be constrained
+// in the viewport.
+func (e *textView) PaintRegions(gtx layout.Context, regions []Region, material op.CallOp) {
+	localViewport := image.Rectangle{Max: e.viewSize}
+	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
+	for _, region := range regions {
+		area := clip.Rect(e.adjustPadding(region.Bounds)).Push(gtx.Ops)
 		material.Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 		area.Pop()
@@ -117,6 +130,11 @@ func (e *textView) caretCurrentLine() (start combinedPos, end combinedPos) {
 		rng := e.index.lineRanges[i]
 		return rng.startY >= caretStart.y
 	})
+
+	// No exsiting lines found.
+	if lineIdx == len(e.index.lineRanges) {
+		return caretStart, caretStart
+	}
 
 	line := e.index.lineRanges[lineIdx]
 	start = e.closestToXY(line.startX, line.startY)
@@ -140,25 +158,10 @@ func (e *textView) paintLineHighlight(gtx layout.Context, material op.CallOp) {
 	bounds := image.Rectangle{Min: image.Point{X: 0, Y: start.y - start.ascent.Ceil()},
 		Max: image.Point{X: gtx.Constraints.Max.X, Y: end.y + end.descent.Ceil()}}.Sub(e.scrollOff)
 
-	area := clip.Rect(adjustUseLeading(e.calcLineHeight(), bounds)).Push(gtx.Ops)
+	area := clip.Rect(e.adjustPadding(bounds)).Push(gtx.Ops)
 	material.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)
 	area.Pop()
-}
-
-func (e *textView) paintMatches(gtx layout.Context, matches []MatchRange, material op.CallOp) {
-	localViewport := image.Rectangle{Max: e.viewSize}
-	docViewport := image.Rectangle{Max: e.viewSize}.Add(e.scrollOff)
-	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
-	for _, match := range matches {
-		e.regions = e.index.locate(docViewport, match.Start, match.End, e.regions)
-		for _, region := range e.regions {
-			area := clip.Rect(adjustUseLeading(e.calcLineHeight(), region.Bounds)).Push(gtx.Ops)
-			material.Add(gtx.Ops)
-			paint.PaintOp{}.Add(gtx.Ops)
-			area.Pop()
-		}
-	}
 }
 
 func (e *textView) PaintLineNumber(gtx layout.Context, lt *text.Shaper, material op.CallOp) layout.Dimensions {
@@ -197,7 +200,7 @@ func (e *textView) PaintCaret(gtx layout.Context, material op.CallOp) {
 	cl := image.Rectangle{Max: e.viewSize}
 	carRect = cl.Intersect(carRect)
 	if !carRect.Empty() {
-		defer clip.Rect(adjustUseLeading(e.calcLineHeight(), carRect)).Push(gtx.Ops).Pop()
+		defer clip.Rect(e.adjustPadding(carRect)).Push(gtx.Ops).Pop()
 		material.Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 	}
@@ -231,18 +234,29 @@ func (e *textView) calcLineHeight() float32 {
 	}
 
 	lh := float32(lineHeight.Round()) * lineHeightScale
-	log.Println("line height calculated: ", lineHeight.Ceil(), lh)
+	// log.Println("line height calculated: ", lineHeight.Ceil(), lh)
 	return lh
 }
 
-func adjustUseLeading(lineHeight float32, bounds image.Rectangle) image.Rectangle {
-	if lineHeight <= float32(bounds.Dy()) {
+// adjustPadding adjusts the vertical padding of a bounding box around the texts.
+// This improves the visual effects of selected texts, or any other texts to be highlighted.
+func (e *textView) adjustPadding(bounds image.Rectangle) image.Rectangle {
+	if e.lineHeight <= 0 {
+		e.lineHeight = e.calcLineHeight()
+	}
+
+	if e.lineHeight <= float32(bounds.Dy()) {
 		return bounds
 	}
-	leading := lineHeight - float32(bounds.Dy())
+
+	leading := e.lineHeight - float32(bounds.Dy())
 	adjust := int(math.Round(float64(leading / 2.0)))
+	lowerAdjust := int(math.Round(float64(leading - float32(adjust))))
+	if adjust+lowerAdjust < int(leading) {
+		lowerAdjust++
+	}
 
 	bounds.Min.Y -= adjust
-	bounds.Max.Y += int(math.Round(float64(leading - float32(adjust))))
+	bounds.Max.Y += lowerAdjust
 	return bounds
 }

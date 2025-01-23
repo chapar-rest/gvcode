@@ -37,7 +37,10 @@ type textView struct {
 
 	params text.Parameters
 	shaper *text.Shaper
-	rr     buffer.TextSource
+	// line height used by shaper.
+	lineHeight float32
+
+	rr buffer.TextSource
 	// graphemes tracks the indices of grapheme cluster boundaries within rr.
 	graphemes []int
 	// paragraphReader is used to populate graphemes.
@@ -208,6 +211,9 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 		e.params.LineHeightScale = e.LineHeightScale
 		e.invalidate()
 	}
+
+	// calculate the final line height used by Shaper
+	e.lineHeight = e.calcLineHeight()
 
 	e.makeValid()
 

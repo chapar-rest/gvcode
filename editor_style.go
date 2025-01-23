@@ -1,19 +1,16 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package gvcode
 
 import (
-	"image"
 	"image/color"
 
 	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
-	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
+	"gioui.org/widget/material"
 	"github.com/oligo/gvcode/editor"
 )
 
@@ -28,10 +25,6 @@ type EditorStyle struct {
 	TextSize        unit.Sp
 	// Color is the text color.
 	Color color.NRGBA
-	// Hint contains the text displayed when the editor is empty.
-	Hint string
-	// HintColor is the color of hint text.
-	HintColor color.NRGBA
 	// SelectionColor is the color of the background for selected text.
 	SelectionColor color.NRGBA
 	//LineHighlightColor is the color used to highlight the clicked logical line.
@@ -40,81 +33,35 @@ type EditorStyle struct {
 	// TextMatchColor use the color used to highlight the matched substring.
 	TextMatchColor color.NRGBA
 
-	Editor      *editor.Editor
-	ShowLineNum bool
+	// Gap size between the line number bar and the main text area.
+	LineNumberPadding unit.Dp
+	LineNumberColor   color.NRGBA
 
-	shaper  *text.Shaper
-	lineBar *lineNumberBar
+	// Hint contains the text displayed when the editor is empty.
+	Hint string
+	// HintColor is the color of hint text.
+	HintColor color.NRGBA
+
+	Editor *editor.Editor
+	shaper *text.Shaper
 }
 
-type lineNumberBar struct {
-	shaper          *text.Shaper
-	lineHeight      unit.Sp
-	lineHeightScale float32
-	// Color is the text color.
-	color    color.NRGBA
-	typeFace font.Typeface
-	textSize unit.Sp
-	// padding between line number and the editor content.
-	padding unit.Dp
-}
-
-type EditorConf struct {
-	Shaper             *text.Shaper
-	TextColor          color.NRGBA
-	Bg                 color.NRGBA
-	SelectionColor     color.NRGBA
-	LineHighlightColor color.NRGBA
-	LineNumberColor    color.NRGBA
-	TextMatchColor     color.NRGBA
-	// typeface for editing
-	TypeFace        font.Typeface
-	TextSize        unit.Sp
-	Weight          font.Weight
-	LineHeight      unit.Sp
-	LineHeightScale float32
-	//May be helpful for code syntax highlighting.
-	ColorScheme string
-	ShowLineNum bool
-	// padding between line number and the editor content.
-	LineNumPadding unit.Dp
-}
-
-func NewEditor(editor *editor.Editor, conf *EditorConf, hint string) EditorStyle {
+func NewEditor(th *material.Theme, editor *editor.Editor) EditorStyle {
 
 	es := EditorStyle{
 		Editor: editor,
+		shaper: th.Shaper,
 		Font: font.Font{
-			Typeface: conf.TypeFace,
-			Weight:   conf.Weight,
+			Typeface: th.Face,
 		},
-		LineHeightScale:    conf.LineHeightScale,
-		TextSize:           conf.TextSize,
-		Color:              conf.TextColor,
-		shaper:             conf.Shaper,
-		Hint:               hint,
-		HintColor:          MulAlpha(conf.TextColor, 0xbb),
-		SelectionColor:     MulAlpha(conf.SelectionColor, 0x60),
-		LineHighlightColor: MulAlpha(conf.LineHighlightColor, 0x25),
-		TextMatchColor:     conf.TextMatchColor,
-		ShowLineNum:        conf.ShowLineNum,
-		lineBar: &lineNumberBar{
-			shaper:          conf.Shaper,
-			lineHeight:      conf.LineHeight,
-			lineHeightScale: conf.LineHeightScale,
-			color:           conf.LineNumberColor,
-			typeFace:        conf.TypeFace,
-			textSize:        conf.TextSize,
-			padding:         conf.LineNumPadding,
-		},
-	}
-
-	if conf.LineNumPadding <= 0 {
-		es.lineBar.padding = unit.Dp(32)
-	}
-
-	if conf.LineNumberColor == (color.NRGBA{}) {
-		es.lineBar.color = MulAlpha(conf.TextColor, 0xb6)
+		LineHeightScale:    1.2,
+		TextSize:           th.TextSize,
+		Color:              th.Fg,
+		SelectionColor:     MulAlpha(th.ContrastBg, 0x60),
+		LineHighlightColor: MulAlpha(th.ContrastBg, 0x30),
+		TextMatchColor:     MulAlpha(th.ContrastBg, 0x80),
+		LineNumberColor:    MulAlpha(th.Fg, 0xb6),
+		LineNumberPadding:  unit.Dp(24),
 	}
 
 	return es
@@ -125,12 +72,15 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	textColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: e.Color}.Add(gtx.Ops)
 	textColor := textColorMacro.Stop()
+
 	hintColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: e.HintColor}.Add(gtx.Ops)
 	hintColor := hintColorMacro.Stop()
+
 	selectionColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: blendDisabledColor(!gtx.Enabled(), e.SelectionColor)}.Add(gtx.Ops)
 	selectionColor := selectionColorMacro.Stop()
+
 	lineColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: e.LineHighlightColor}.Add(gtx.Ops)
 	lineColor := lineColorMacro.Stop()
@@ -138,6 +88,10 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	matchColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: e.TextMatchColor}.Add(gtx.Ops)
 	matchColor := matchColorMacro.Stop()
+
+	lineNumColorMacro := op.Record(gtx.Ops)
+	paint.ColorOp{Color: e.LineNumberColor}.Add(gtx.Ops)
+	lineNumColor := lineNumColorMacro.Stop()
 
 	macro := op.Record(gtx.Ops)
 	tl := widget.Label{
@@ -158,31 +112,10 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	e.Editor.LineHeight = e.LineHeight
 	e.Editor.LineHeightScale = e.LineHeightScale
 
-	if !e.ShowLineNum {
-		d := e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize, textColor, selectionColor, lineColor, matchColor)
-		if e.Editor.Len() == 0 {
-			call.Add(gtx.Ops)
-		}
-		return d
+	dims = e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize, textColor, selectionColor, lineColor, matchColor, lineNumColor)
+	if e.Editor.Len() == 0 {
+		call.Add(gtx.Ops)
 	}
-
-	// clip line number bar.
-	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
-	dims = layout.Flex{
-		Axis: layout.Horizontal,
-	}.Layout(gtx,
-
-		layout.Rigid(layout.Spacer{Width: e.lineBar.padding}.Layout),
-
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			d := e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize, textColor, selectionColor, lineColor, matchColor)
-			if e.Editor.Len() == 0 {
-				call.Add(gtx.Ops)
-			}
-			return d
-		}),
-	)
-
 	return dims
 }
 
