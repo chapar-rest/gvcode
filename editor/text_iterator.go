@@ -15,16 +15,6 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
-type TextStyle struct {
-	Line int
-	// offset of start in the text
-	Start int
-	// offset of end in the text
-	End        int
-	Color      op.CallOp
-	Background op.CallOp
-}
-
 type glyphStyle struct {
 	g  text.Glyph
 	fg op.CallOp
@@ -246,30 +236,4 @@ func (span *glyphSpan) calculateBgRect() clip.Rect {
 		Min: image.Point{X: 0, Y: minY},
 		Max: image.Point{X: maxX, Y: maxY},
 	}
-}
-
-func toGlyphStyle(g text.Glyph, start int, detaultMaterial op.CallOp, styles []*TextStyle) glyphStyle {
-	var style *TextStyle
-	for _, s := range styles {
-		if start >= s.Start && start < s.End {
-			style = s
-			break
-		}
-	}
-
-	gs := glyphStyle{g: g}
-
-	if style == nil {
-		gs.fg = detaultMaterial
-		return gs
-	}
-
-	gs.fg = style.Color
-	gs.bg = style.Background
-
-	if style.Color == (op.CallOp{}) {
-		gs.fg = detaultMaterial
-	}
-
-	return gs
 }

@@ -24,6 +24,24 @@ import (
 	"github.com/oligo/gvcode/buffer"
 )
 
+// TextRange contains the range of text of interest in the document. It can used for
+// search, styling text, or any other purposes.
+type TextRange struct {
+	// offset of the start rune in the document.
+	Start int
+	// offset of the end rune in the document.
+	End int
+}
+
+// TextStyle defines style for a range of text in the document.
+type TextStyle struct {
+	TextRange
+	// Color of the text..
+	Color op.CallOp
+	// Background color of the painted text in the range.
+	Background op.CallOp
+}
+
 // Editor implements an editable and scrollable text area.
 type Editor struct {
 	// text manages the text buffer and provides shaping and cursor positioning
@@ -85,14 +103,6 @@ type imeState struct {
 }
 
 type selectionAction int
-
-// Text range used for search or any other purposes.
-type TextRange struct {
-	// offset of the start rune the match.
-	Start int
-	// offset of the end rune the match.
-	End int
-}
 
 const (
 	selectionExtend selectionAction = iota
