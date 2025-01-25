@@ -300,6 +300,16 @@ func (e *textView) invalidate() {
 	e.valid = false
 }
 
+// Set the text of the buffer. It returns the number of runes inserted.
+func (e *textView) SetText(s string) int {
+	e.rr.SetText([]byte(s))
+	sc := e.rr.Len()
+
+	// e.SetCaret(0, 0)
+	e.invalidate()
+	return sc
+}
+
 // Replace the text between start and end with s. Indices are in runes.
 // It returns the number of runes inserted.
 func (e *textView) Replace(start, end int, s string) int {

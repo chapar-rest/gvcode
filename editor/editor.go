@@ -323,11 +323,12 @@ func (e *Editor) Text() string {
 	return string(e.scratch)
 }
 
-func (e *Editor) SetText(s string, addHistory bool) {
+func (e *Editor) SetText(s string) {
 	e.initBuffer()
 
-	// disable history when loading doc. In other case history might be required
-	e.replace(0, e.text.Len(), s)
+	e.text.SetText(s)
+	e.ime.start = 0
+	e.ime.end = 0
 	// Reset xoff and move the caret to the beginning.
 	e.SetCaret(0, 0)
 }

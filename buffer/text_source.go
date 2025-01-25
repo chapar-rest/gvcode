@@ -25,6 +25,9 @@ type TextSource interface {
 	// Len is the length of the editor contents, in runes.
 	Len() int
 
+	// SetText reset the buffer and replace the content of the buffer with the provided text.
+	SetText(text []byte)
+
 	// Insert insert text at the logical position specifed by runeIndex measured by rune.
 	Insert(runeIndex int, text string) bool
 	// Delete text from startOff to endOff(exclusive).

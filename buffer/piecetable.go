@@ -72,6 +72,24 @@ func NewPieceTable(text []byte) *PieceTable {
 	return pt
 }
 
+func (pt *PieceTable) SetText(text []byte) {
+	pt.originalBuf = newTextBuffer()
+	pt.modifyBuf = newTextBuffer()
+	pt.pieces = newPieceList()
+	pt.undoStack.clear()
+	pt.redoStack.clear()
+	pt.seqBytes = 0
+	pt.seqLength = 0
+	pt.lineIndex = lineIndex{}
+	pt.lastAction = actionUnknown
+	pt.lastActionEndIdx = 0
+	pt.lastInsertPiece = nil
+	pt.changed = false
+	pt.currentBatch = nil
+
+	pt.init(text)
+}
+
 // Initialize the piece table with the text by adding the text to the original buffer,
 // and create the first piece point to the buffer.
 func (pt *PieceTable) init(text []byte) {
