@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"errors"
 	"io"
 	"unicode/utf8"
 )
@@ -115,6 +116,9 @@ func (r *PieceTableReader) ReadRuneAt(off int64) (rune, int, error) {
 	var buf [utf8.UTFMax]byte
 	b := buf[:]
 	n, err := r.ReadAt(b, off)
+	if errors.Is(err, io.EOF) && n>0 {
+		err = nil
+	}
 	b = b[:n]
 	c, s := utf8.DecodeRune(b)
 	return c, s, err
