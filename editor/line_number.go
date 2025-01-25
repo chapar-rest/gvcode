@@ -29,10 +29,6 @@ lineLoop:
 			break
 		}
 
-		if i == len(lines)-1 {
-			// todo: adjust line height of the last empty line.
-		}
-
 		shaper.LayoutString(params, strconv.Itoa(i+1))
 		glyphs = glyphs[:0]
 
@@ -64,7 +60,6 @@ lineLoop:
 			continue
 		}
 
-		//log.Println("line glyphs and width: ", i+1, bounds.Dx(), len(glyphs))
 		dims.Size = image.Point{X: max(bounds.Dx(), dims.Size.X), Y: dims.Size.Y + bounds.Dy()}
 
 		trans := op.Affine(f32.Affine2D{}.Offset(f32.Point{Y: float32(line.startY)}.Sub(layout.FPt(viewport.Min)))).Push(gtx.Ops)
@@ -78,6 +73,5 @@ lineLoop:
 		trans.Pop()
 	}
 
-	//dims.Size = gtx.Constraints.Constrain(dims.Size)
 	return dims
 }

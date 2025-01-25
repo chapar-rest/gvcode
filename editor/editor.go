@@ -469,12 +469,14 @@ func (e *Editor) ReplaceAll(newStr string) int {
 
 	// Traverse in reverse order to prevent match offset changes after
 	// each replace.
+	e.buffer.GroupOp()
 	finalPos := 0
 	for idx := len(e.matches) - 1; idx >= 0; idx-- {
 		start, end := e.matches[idx].Start, e.matches[idx].End
 		e.replace(start, end, newStr)
 		finalPos = start
 	}
+	e.buffer.UnGroupOp()
 
 	e.SetCaret(finalPos, finalPos)
 	return len(e.matches)
