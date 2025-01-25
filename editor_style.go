@@ -9,7 +9,6 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
-	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode/editor"
 )
@@ -37,17 +36,11 @@ type EditorStyle struct {
 	LineNumberPadding unit.Dp
 	LineNumberColor   color.NRGBA
 
-	// Hint contains the text displayed when the editor is empty.
-	Hint string
-	// HintColor is the color of hint text.
-	HintColor color.NRGBA
-
 	Editor *editor.Editor
 	shaper *text.Shaper
 }
 
 func NewEditor(th *material.Theme, editor *editor.Editor) EditorStyle {
-
 	es := EditorStyle{
 		Editor: editor,
 		shaper: th.Shaper,
@@ -57,10 +50,10 @@ func NewEditor(th *material.Theme, editor *editor.Editor) EditorStyle {
 		LineHeightScale:    1.2,
 		TextSize:           th.TextSize,
 		Color:              th.Fg,
-		SelectionColor:     MulAlpha(th.ContrastBg, 0x60),
-		LineHighlightColor: MulAlpha(th.ContrastBg, 0x30),
-		TextMatchColor:     MulAlpha(th.ContrastBg, 0x80),
-		LineNumberColor:    MulAlpha(th.Fg, 0xb6),
+		SelectionColor:     mulAlpha(th.ContrastBg, 0x60),
+		LineHighlightColor: mulAlpha(th.ContrastBg, 0x30),
+		TextMatchColor:     mulAlpha(th.ContrastBg, 0x80),
+		LineNumberColor:    mulAlpha(th.Fg, 0xb6),
 		LineNumberPadding:  unit.Dp(24),
 	}
 
@@ -72,10 +65,6 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	textColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: e.Color}.Add(gtx.Ops)
 	textColor := textColorMacro.Stop()
-
-	hintColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: e.HintColor}.Add(gtx.Ops)
-	hintColor := hintColorMacro.Stop()
 
 	selectionColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: blendDisabledColor(!gtx.Enabled(), e.SelectionColor)}.Add(gtx.Ops)
@@ -93,41 +82,21 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	paint.ColorOp{Color: e.LineNumberColor}.Add(gtx.Ops)
 	lineNumColor := lineNumColorMacro.Stop()
 
-	macro := op.Record(gtx.Ops)
-	tl := widget.Label{
-		Alignment:       e.Editor.Alignment,
-		MaxLines:        0,
-		LineHeight:      e.LineHeight,
-		LineHeightScale: e.LineHeightScale,
-	}
-	dims := tl.Layout(gtx, e.shaper, e.Font, e.TextSize, e.Hint, hintColor)
-	call := macro.Stop()
-
-	if w := dims.Size.X; gtx.Constraints.Min.X < w {
-		gtx.Constraints.Min.X = w
-	}
-	if h := dims.Size.Y; gtx.Constraints.Min.Y < h {
-		gtx.Constraints.Min.Y = h
-	}
 	e.Editor.LineHeight = e.LineHeight
 	e.Editor.LineHeightScale = e.LineHeightScale
 
-	dims = e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize, textColor, selectionColor, lineColor, matchColor, lineNumColor)
-	if e.Editor.Len() == 0 {
-		call.Add(gtx.Ops)
-	}
-	return dims
+	return e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize, textColor, selectionColor, lineColor, matchColor, lineNumColor)
 }
 
 func blendDisabledColor(disabled bool, c color.NRGBA) color.NRGBA {
 	if disabled {
-		return Disabled(c)
+		return disabledColor(c)
 	}
 	return c
 }
 
-// MulAlpha applies the alpha to the color.
-func MulAlpha(c color.NRGBA, alpha uint8) color.NRGBA {
+// mulAlpha applies the alpha to the color.
+func mulAlpha(c color.NRGBA, alpha uint8) color.NRGBA {
 	c.A = uint8(uint32(c.A) * uint32(alpha) / 0xFF)
 	return c
 }
@@ -146,11 +115,11 @@ func approxLuminance(c color.NRGBA) byte {
 // Disabled blends color towards the luminance and multiplies alpha.
 // Blending towards luminance will desaturate the color.
 // Multiplying alpha blends the color together more with the background.
-func Disabled(c color.NRGBA) (d color.NRGBA) {
+func disabledColor(c color.NRGBA) (d color.NRGBA) {
 	const r = 80 // blend ratio
 	lum := approxLuminance(c)
 	d = mix(c, color.NRGBA{A: c.A, R: lum, G: lum, B: lum}, r)
-	d = MulAlpha(d, 128+32)
+	d = mulAlpha(d, 128+32)
 	return
 }
 
