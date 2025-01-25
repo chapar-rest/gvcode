@@ -238,8 +238,8 @@ func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.Call
 	semantic.Editor.Add(gtx.Ops)
 	if e.Len() > 0 {
 		e.paintSelection(gtx, selectMaterial)
-		e.paintTextRanges(gtx, rangeMaterial)
 		e.paintLineHighlight(gtx, lineMaterial)
+		e.paintTextRanges(gtx, rangeMaterial)
 		e.paintText(gtx, textMaterial)
 	}
 	if gtx.Enabled() {
@@ -290,8 +290,10 @@ func (e *Editor) paintTextRanges(gtx layout.Context, material op.CallOp) {
 	e.initBuffer()
 
 	e.regions = e.regions[:0]
+	rg := make([]Region, 0)
 	for _, match := range e.matches {
-		e.regions = append(e.regions, e.text.Regions(match.Start, match.End, e.regions)...)
+		rg = rg[:0]
+		e.regions = append(e.regions, e.text.Regions(match.Start, match.End, rg)...)
 	}
 
 	e.text.PaintRegions(gtx, e.regions, material)

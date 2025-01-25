@@ -12,6 +12,7 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/text"
+	"gioui.org/unit"
 )
 
 func (e *textView) layoutText(lt *text.Shaper) {
@@ -97,8 +98,14 @@ func (e *textView) PaintSelection(gtx layout.Context, material op.CallOp) {
 	docViewport := image.Rectangle{Max: e.viewSize}.Add(e.scrollOff)
 	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
 	e.regions = e.index.locate(docViewport, e.caret.start, e.caret.end, e.regions)
+
+	expandEmptyRegion := len(e.regions) > 1
 	for _, region := range e.regions {
-		area := clip.Rect(e.adjustPadding(region.Bounds)).Push(gtx.Ops)
+		bounds := e.adjustPadding(region.Bounds)
+		if expandEmptyRegion && bounds.Dx() <= 0 {
+			bounds.Max.X += gtx.Dp(unit.Dp(2))
+		}
+		area := clip.Rect(bounds).Push(gtx.Ops)
 		material.Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 		area.Pop()
