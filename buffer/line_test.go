@@ -2,7 +2,7 @@ package buffer
 
 import "testing"
 
-func TestLineIndexInsertDelete(t *testing.T) {
+func TestLineIndexInsert(t *testing.T) {
 	idx := &lineIndex{}
 
 	printIdx := func() {
@@ -44,4 +44,19 @@ func TestLineIndexInsertDelete(t *testing.T) {
 		t.Fail()
 	}
 
+}
+
+func TestLineIndexDelete(t *testing.T) {
+	idx := &lineIndex{}
+	idx.lines = append(idx.lines, 
+		lineInfo{length: 4, hasLineBreak: true},
+		lineInfo{length: 4, hasLineBreak: true},
+		lineInfo{length: 3, hasLineBreak: false},
+	)
+
+	idx.UpdateOnDelete(0, 11)
+
+	if len(idx.lines) != 0 {
+		t.Fail()
+	}
 }

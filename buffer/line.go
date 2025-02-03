@@ -10,6 +10,7 @@ const (
 )
 
 type lineInfo struct {
+	// size in runes of the line
 	length       int
 	hasLineBreak bool
 }
@@ -264,36 +265,6 @@ func (li *lineIndex) applyDelete(runeIndex int, length int) []lineInfo {
 
 	}
 
-	// Handle the splitting of the starting line
-	//startLine := li.lines[startIndex]
-	splitLeft := runeIndex - startLineRuneCount
-	removed := lineInfo{
-		length:       li.lines[startIndex].length - splitLeft,
-		hasLineBreak: li.lines[startIndex].hasLineBreak,
-	}
-	removedLines = append(removedLines, removed)
-	if splitLeft > 0 {
-		li.lines[startIndex] = lineInfo{length: splitLeft, hasLineBreak: false}
-	} else {
-		li.lines = append(li.lines[:startIndex], li.lines[startIndex+1:]...)
-		endIndex--
-	}
-
-	i := startIndex + 1
-	for i < endIndex {
-		removedLines = append(removedLines, li.lines[i])
-		li.lines = append(li.lines[:i], li.lines[i+1:]...)
-		endIndex--
-		i++
-		if endIndex <= 0 {
-			break
-		}
-	}
-
-	if endIndex <= 0 {
-		return removedLines
-	}
-
 	// Handle the splitting of the ending line
 	if endIndex < len(li.lines) {
 		endLine := li.lines[endIndex]
@@ -308,19 +279,41 @@ func (li *lineIndex) applyDelete(runeIndex int, length int) []lineInfo {
 			removed.hasLineBreak = false
 		} else {
 			removed.hasLineBreak = endLine.hasLineBreak
-			li.lines = append(li.lines[:endIndex], li.lines[endIndex+1:]...)
+			li.lines = slices.Delete(li.lines, endIndex, endIndex+1)
+			//li.lines = append(li.lines[:endIndex], li.lines[endIndex+1:]...)
 		}
 
 		removedLines = append(removedLines, removed)
 	}
 
+	nextLine := endIndex - 1
+
+	for nextLine > startIndex {
+		removedLines = append(removedLines, li.lines[nextLine])
+		li.lines = slices.Delete(li.lines, nextLine, nextLine+1)
+		nextLine--
+	}
+
+	// Handle the splitting of the starting line
+	//startLine := li.lines[startIndex]
+	splitLeft := runeIndex - startLineRuneCount
+	removed := lineInfo{
+		length:       li.lines[startIndex].length - splitLeft,
+		hasLineBreak: li.lines[startIndex].hasLineBreak,
+	}
+	removedLines = append(removedLines, removed)
+	li.lines[startIndex] = lineInfo{length: splitLeft, hasLineBreak: false}
+	if splitLeft <= 0 {
+		li.lines = slices.Delete(li.lines, startIndex, startIndex+1)
+		nextLine--
+	}
+
 	// Check if the previous line has line break.
 	// Try to merge it with the previous line.
-	if endIndex >= 1 && len(li.lines) > endIndex && !li.lines[endIndex-1].hasLineBreak {
-		li.lines[endIndex-1].length += li.lines[endIndex].length
-		li.lines[endIndex-1].hasLineBreak = li.lines[endIndex].hasLineBreak
-		li.lines = append(li.lines[:endIndex], li.lines[endIndex+1:]...)
-
+	if nextLine >= 0 && !li.lines[nextLine].hasLineBreak && len(li.lines) > nextLine+1 {
+		li.lines[nextLine].length += li.lines[nextLine+1].length
+		li.lines[nextLine].hasLineBreak = li.lines[nextLine+1].hasLineBreak
+		li.lines = slices.Delete(li.lines, nextLine+1, nextLine+2)
 	}
 
 	return removedLines
