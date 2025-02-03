@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
 package editor
 
 import (
@@ -11,8 +9,6 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/text"
-
-	"golang.org/x/image/math/fixed"
 )
 
 type glyphStyle struct {
@@ -34,13 +30,7 @@ type textIterator struct {
 	// viewport is the rectangle of document coordinates that the iterator is
 	// trying to fill with text.
 	viewport image.Rectangle
-	// maxLines is the maximum number of text lines that should be displayed.
-	maxLines int
 
-	// truncated tracks the count of truncated runes in the text.
-	truncated int
-	// linesSeen tracks the quantity of line endings this iterator has seen.
-	linesSeen int
 	// lineOff tracks the origin for the glyphs in the current line.
 	lineOff f32.Point
 	// padding is the space needed outside of the bounds of the text to ensure no
@@ -59,19 +49,7 @@ type textIterator struct {
 
 // processGlyph checks whether the glyph is visible within the iterator's configured
 // viewport and (if so) updates the iterator's text dimensions to include the glyph.
-func (it *textIterator) processGlyph(g text.Glyph, ok bool) (visibleOrBefore bool) {
-	if it.maxLines > 0 {
-		if g.Flags&text.FlagTruncator != 0 && g.Flags&text.FlagClusterBreak != 0 {
-			// A glyph carrying both of these flags provides the count of truncated runes.
-			it.truncated = int(g.Runes)
-		}
-		if g.Flags&text.FlagLineBreak != 0 {
-			it.linesSeen++
-		}
-		if it.linesSeen == it.maxLines && g.Flags&text.FlagParagraphBreak != 0 {
-			return false
-		}
-	}
+func (it *textIterator) processGlyph(g text.Glyph, ok bool) (visible bool) {
 	// Compute the maximum extent to which glyphs overhang on the horizontal
 	// axis.
 	if d := g.Bounds.Min.X.Floor(); d < it.padding.Min.X {
@@ -119,10 +97,6 @@ func (it *textIterator) processGlyph(g text.Glyph, ok bool) (visibleOrBefore boo
 	return ok && !below
 }
 
-func fixedToFloat(i fixed.Int26_6) float32 {
-	return float32(i) / 64.0
-}
-
 // paintGlyph buffers up and paints text glyphs. It should be invoked iteratively upon each glyph
 // until it returns false. The line parameter should be a slice with
 // a backing array of sufficient size to buffer multiple glyphs.
@@ -131,14 +105,14 @@ func fixedToFloat(i fixed.Int26_6) float32 {
 // This design is awkward, but prevents the line slice from escaping
 // to the heap.
 func (it *textIterator) paintGlyph(gtx layout.Context, shaper *text.Shaper, glyph glyphStyle, line []glyphStyle) ([]glyphStyle, bool) {
-	visibleOrBefore := it.processGlyph(glyph.g, true)
+	visible := it.processGlyph(glyph.g, true)
 	if it.visible {
 		if len(line) == 0 {
 			it.lineOff = f32.Point{X: fixedToFloat(glyph.g.X), Y: float32(glyph.g.Y)}.Sub(layout.FPt(it.viewport.Min))
 		}
 		line = append(line, glyph)
 	}
-	if glyph.g.Flags&text.FlagLineBreak != 0 || cap(line)-len(line) == 0 || !visibleOrBefore {
+	if glyph.g.Flags&text.FlagLineBreak != 0 || cap(line)-len(line) == 0 || !visible {
 		t := op.Affine(f32.Affine2D{}.Offset(it.lineOff)).Push(gtx.Ops)
 		//var glyphLine []text.Glyph
 		spans := it.groupGlyphs(line)
@@ -170,7 +144,7 @@ func (it *textIterator) paintGlyph(gtx layout.Context, shaper *text.Shaper, glyp
 		t.Pop()
 		line = line[:0]
 	}
-	return line, visibleOrBefore
+	return line, visible
 }
 
 func (it *textIterator) groupGlyphs(line []glyphStyle) []*glyphSpan {

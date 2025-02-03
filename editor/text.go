@@ -9,12 +9,44 @@ import (
 	"gioui.org/f32"
 	"gioui.org/font"
 	"gioui.org/layout"
+	"gioui.org/op"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"github.com/go-text/typesetting/segmenter"
 	"github.com/oligo/gvcode/buffer"
 	"golang.org/x/exp/slices"
 	"golang.org/x/image/math/fixed"
 )
+
+// TextRange contains the range of text of interest in the document. It can used for
+// search, styling text, or any other purposes.
+type TextRange struct {
+	// offset of the start rune in the document.
+	Start int
+	// offset of the end rune in the document.
+	End int
+}
+
+// TextStyle defines style for a range of text in the document.
+type TextStyle struct {
+	TextRange
+	// Color of the text..
+	Color op.CallOp
+	// Background color of the painted text in the range.
+	Background op.CallOp
+}
+
+type caretPos struct {
+	// xoff is the offset to the current position when moving between lines.
+	xoff fixed.Int26_6
+	// start is the current caret position in runes, and also the start position of
+	// selected text. end is the end position of selected text. If start
+	// == end, then there's no selection. Note that it's possible (and
+	// common) that the caret (start) is after the end, e.g. after
+	// Shift-DownArrow.
+	start int
+	end   int
+}
 
 // textView provides efficient shaping and indexing of interactive text. When provided
 // with a TextSource, textView will shape and cache the runes within that source.
@@ -23,50 +55,51 @@ import (
 type textView struct {
 	Alignment text.Alignment
 	// LineHeight controls the distance between the baselines of lines of text.
-	// If zero, a sensible default will be used.
+	// If zero, the font size will be used.
 	LineHeight unit.Sp
-	// LineHeightScale applies a scaling factor to the LineHeight. If zero, a
-	// sensible default will be used.
+	// LineHeightScale applies a scaling factor to the LineHeight. If zero, a default
+	// value 1.2 will be used.
 	LineHeightScale float32
 	// WrapPolicy configures how displayed text will be broken into lines.
 	WrapPolicy text.WrapPolicy
-	// LineNumber configures whether to display line number or not.
-	LineNumber bool
-	// LineNumberPadding set the padding between the line number the main text area.
-	LineNumberPadding unit.Dp
+	CaretWidth unit.Dp
 
+	src    buffer.TextSource
 	params text.Parameters
 	shaper *text.Shaper
+	// dimensions of the layouted document.
+	dims layout.Dimensions
+	// viewport size
+	viewSize image.Point
 	// line height used by shaper.
-	lineHeight float32
-
-	rr buffer.TextSource
-	// graphemes tracks the indices of grapheme cluster boundaries within rr.
-	graphemes []int
-	// paragraphReader is used to populate graphemes.
-	paragraphReader graphemeReader
-	viewSize        image.Point
-	valid           bool
-	regions         []Region
-	dims            layout.Dimensions
-	index           glyphIndex
-	caret           struct {
-		// xoff is the offset to the current position when moving between lines.
-		xoff fixed.Int26_6
-		// start is the current caret position in runes, and also the start position of
-		// selected text. end is the end position of selected text. If start
-		// == end, then there's no selection. Note that it's possible (and
-		// common) that the caret (start) is after the end, e.g. after
-		// Shift-DownArrow.
-		start int
-		end   int
-	}
-
+	lineHeight fixed.Int26_6
+	// scrolled offset relative to the start of dims.
 	scrollOff image.Point
+
+	index glyphIndex
+	// graphemes tracks the indices of grapheme cluster boundaries within text source.
+	graphemes []int
+	seg       segmenter.Segmenter
+
+	// // paragraphReader is used to populate graphemes.
+	paragraphReader graphemeReader
+
+	// The layout is valid or not. Invalid layout requires a re-layout.
+	valid bool
+	// caret position in the view.
+	caret   caretPos
+	regions []Region
+}
+
+// SetSource initializes the underlying data source for the Text. This
+// must be done before invoking any other methods on Text.
+func (e *textView) SetSource(source buffer.TextSource) {
+	e.src = source
+	e.invalidate()
 }
 
 func (e *textView) Changed() bool {
-	return e.rr.Changed()
+	return e.src.Changed()
 }
 
 // Dimensions returns the dimensions of the visible text.
@@ -79,13 +112,6 @@ func (e *textView) Dimensions() layout.Dimensions {
 // text that isn't visible within the current viewport.
 func (e *textView) FullDimensions() layout.Dimensions {
 	return e.dims
-}
-
-// SetSource initializes the underlying data source for the Text. This
-// must be done before invoking any other methods on Text.
-func (e *textView) SetSource(source buffer.TextSource) {
-	e.rr = source
-	e.invalidate()
 }
 
 func (e *textView) makeValid() {
@@ -134,13 +160,6 @@ func (e *textView) closestToXYGraphemes(x fixed.Int26_6, y int) combinedPos {
 	}
 }
 
-func absFixed(i fixed.Int26_6) fixed.Int26_6 {
-	if i < 0 {
-		return -i
-	}
-	return i
-}
-
 // MaxLines moves the cursor the specified number of lines vertically, ensuring
 // that the resulting position is aligned to a grapheme cluster.
 func (e *textView) MoveLines(distance int, selAct selectionAction) {
@@ -152,17 +171,6 @@ func (e *textView) MoveLines(distance int, selAct selectionAction) {
 	e.caret.start = pos.runes
 	e.caret.xoff = x - pos.x
 	e.updateSelection(selAct)
-}
-
-// calculateViewSize determines the size of the current visible content,
-// ensuring that even if there is no text content, some space is reserved
-// for the caret.
-func (e *textView) calculateViewSize(gtx layout.Context) image.Point {
-	base := e.dims.Size
-	if caretWidth := e.caretWidth(gtx); base.X < caretWidth {
-		base.X = caretWidth
-	}
-	return gtx.Constraints.Constrain(base)
 }
 
 // Layout the text, reshaping it as necessary.
@@ -214,7 +222,6 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 
 	// calculate the final line height used by Shaper
 	e.lineHeight = e.calcLineHeight()
-
 	e.makeValid()
 
 	if viewSize := e.calculateViewSize(gtx); viewSize != e.viewSize {
@@ -224,11 +231,27 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 	e.makeValid()
 }
 
+// Calculate line height. Maybe there's a better way?
+func (tv *textView) calcLineHeight() fixed.Int26_6 {
+	lineHeight := tv.params.LineHeight
+	// align with how text.Shaper handles default value of tv.params.LineHeight.
+	if lineHeight == 0 {
+		lineHeight = tv.params.PxPerEm
+	}
+	lineHeightScale := tv.params.LineHeightScale
+	// align with how text.Shaper handles default value of tv.params.LineHeightScale.
+	if lineHeightScale == 0 {
+		lineHeightScale = 1.2
+	}
+
+	return floatToFixed(fixedToFloat(lineHeight) * lineHeightScale)
+}
+
 // ByteOffset returns the start byte of the rune at the given
 // rune offset, clamped to the size of the text.
 func (e *textView) ByteOffset(runeOffset int) int64 {
 	pos := e.closestToRune(runeOffset)
-	return int64(e.rr.RuneOffset(pos.runes))
+	return int64(e.src.RuneOffset(pos.runes))
 }
 
 // Len is the length of the editor contents, in runes.
@@ -277,12 +300,6 @@ func (e *textView) MoveCoord(pos image.Point) {
 	e.caret.xoff = 0
 }
 
-// Truncated returns whether the text in the textView is currently
-// truncated due to a restriction on the number of lines.
-func (e *textView) Truncated() bool {
-	return e.index.truncated
-}
-
 // CaretPos returns the line & column numbers of the caret.
 func (e *textView) CaretPos() (line, col int) {
 	pos := e.closestToRune(e.caret.start)
@@ -296,14 +313,15 @@ func (e *textView) CaretCoords() f32.Point {
 	return f32.Pt(float32(pos.x)/64-float32(e.scrollOff.X), float32(pos.y-e.scrollOff.Y))
 }
 
+// invalidate mark the layout as invalid.
 func (e *textView) invalidate() {
 	e.valid = false
 }
 
 // Set the text of the buffer. It returns the number of runes inserted.
 func (e *textView) SetText(s string) int {
-	e.rr.SetText([]byte(s))
-	sc := e.rr.Len()
+	e.src.SetText([]byte(s))
+	sc := e.src.Len()
 
 	// e.SetCaret(0, 0)
 	e.invalidate()
@@ -322,7 +340,7 @@ func (e *textView) Replace(start, end int, s string) int {
 	sc := utf8.RuneCountInString(s)
 	newEnd := startPos.runes + sc
 
-	e.rr.Replace(startOff, endPos.runes, s)
+	e.src.Replace(startOff, endPos.runes, s)
 	adjust := func(pos int) int {
 		switch {
 		case newEnd < pos && pos <= endPos.runes:
@@ -444,11 +462,11 @@ func (e *textView) MoveWord(distance int, selAct selectionAction) {
 	}
 	// next returns the appropriate rune given the direction.
 	next := func() (r rune) {
-		off := e.rr.RuneOffset(caret.runes)
+		off := e.src.RuneOffset(caret.runes)
 		if direction < 0 {
-			r, _, _ = e.rr.ReadRuneBefore(int64(off))
+			r, _, _ = e.src.ReadRuneBeforeBytes(int64(off))
 		} else {
-			r, _, _ = e.rr.ReadRuneAt(int64(off))
+			r, _, _ = e.src.ReadRuneAtBytes(int64(off))
 		}
 		return r
 	}
@@ -509,15 +527,15 @@ func (e *textView) SetCaret(start, end int) {
 // Callers can guarantee that the buf is large enough by providing a buffer
 // with capacity e.SelectionLen()*utf8.UTFMax.
 func (e *textView) SelectedText(buf []byte) []byte {
-	startOff := e.rr.RuneOffset(e.caret.start)
-	endOff := e.rr.RuneOffset(e.caret.end)
+	startOff := e.src.RuneOffset(e.caret.start)
+	endOff := e.src.RuneOffset(e.caret.end)
 	start := min(startOff, endOff)
 	end := max(startOff, endOff)
 	if cap(buf) < end-start {
 		buf = make([]byte, end-start)
 	}
 	buf = buf[:end-start]
-	n, _ := e.rr.ReadAt(buf, int64(start))
+	n, _ := e.src.ReadAt(buf, int64(start))
 	// There is no way to reasonably handle a read error here. We rely upon
 	// implementations of textSource to provide other ways to signal errors
 	// if the user cares about that, and here we use whatever data we were
@@ -539,7 +557,7 @@ func (e *textView) ClearSelection() {
 
 // Undo revert the last operation(s) and mark the textview invalid.
 func (e *textView) Undo() ([]buffer.CursorPos, bool) {
-	cursors, ok := e.rr.Undo()
+	cursors, ok := e.src.Undo()
 	if ok {
 		e.invalidate()
 	}
@@ -549,7 +567,7 @@ func (e *textView) Undo() ([]buffer.CursorPos, bool) {
 
 // Redo revert the last undo operation(s) and mark the textview invalid.
 func (e *textView) Redo() ([]buffer.CursorPos, bool) {
-	cursors, ok := e.rr.Redo()
+	cursors, ok := e.src.Redo()
 	if ok {
 		e.invalidate()
 	}
@@ -564,4 +582,19 @@ func (e *textView) Regions(start, end int, regions []Region) []Region {
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 	return e.index.locate(viewport, start, end, regions)
+}
+
+func absFixed(i fixed.Int26_6) fixed.Int26_6 {
+	if i < 0 {
+		return -i
+	}
+	return i
+}
+
+func fixedToFloat(i fixed.Int26_6) float32 {
+	return float32(i) / 64.0
+}
+
+func floatToFixed(f float32) fixed.Int26_6 {
+	return fixed.Int26_6(f * 64)
 }

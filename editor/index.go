@@ -3,34 +3,13 @@
 package editor
 
 import (
-	"bufio"
 	"image"
-	"io"
 	"math"
 	"sort"
 
 	"gioui.org/text"
-	"github.com/go-text/typesetting/segmenter"
 	"golang.org/x/image/math/fixed"
 )
-
-// screen line info
-type lineInfo struct {
-	xOff            fixed.Int26_6
-	yOff            int
-	width           fixed.Int26_6
-	ascent, descent fixed.Int26_6
-	glyphs          int
-}
-
-// lineRange contains the pixel coordinates of the start and end position
-// of the logical line.
-type lineRange struct {
-	startX fixed.Int26_6
-	startY int
-	endX   fixed.Int26_6
-	endY   int
-}
 
 type glyphIndex struct {
 	// glyphs holds the glyphs processed.
@@ -80,37 +59,6 @@ func (g *glyphIndex) reset() {
 	g.midCluster = false
 }
 
-// screenPos represents a character position in text line and column numbers,
-// not pixels.
-type screenPos struct {
-	// col is the column, measured in runes.
-	// FIXME: we only ever use col for start or end of lines.
-	// We don't need accurate accounting, so can we get rid of it?
-	col  int
-	line int
-}
-
-// combinedPos is a point in the editor.
-type combinedPos struct {
-	// runes is the offset in runes.
-	runes int
-
-	lineCol screenPos
-
-	// Pixel coordinates
-	x fixed.Int26_6
-	y int
-
-	ascent, descent fixed.Int26_6
-
-	// runIndex tracks which run this position is within, counted each time
-	// the index processes an end of run marker.
-	runIndex int
-	// towardOrigin tracks whether this glyph's run is progressing toward the
-	// origin or away from it.
-	towardOrigin bool
-}
-
 // incrementPosition returns the next position after pos (if any). Pos _must_ be
 // an unmodified position acquired from one of the closest* methods. If eof is
 // true, there was no next position.
@@ -140,11 +88,25 @@ func (g *glyphIndex) insertPosition(pos combinedPos) {
 	g.positions = append(g.positions, pos)
 }
 
+func (g *glyphIndex) TrackLine(gl text.Glyph) {
+	if len(g.glyphs) <= 0 {
+		g.lineRanges[0] = newLineRange(gl, gl)
+	}
+
+	startParagraph := gl.Flags&text.FlagParagraphStart != 0
+
+	if startParagraph {
+		g.lineRanges = append(g.lineRanges, newLineRange(gl, gl))
+	} else {
+		// the line may not have a line break, so we update the end of the logical line range on
+		// each coming glyph
+		g.lineRanges[len(g.lineRanges)-1].endX = gl.X
+		g.lineRanges[len(g.lineRanges)-1].endY = int(gl.Y)
+	}
+}
+
 // Glyph indexes the provided glyph, generating text cursor positions for it.
 func (g *glyphIndex) Glyph(gl text.Glyph) {
-	if len(g.glyphs) <= 0 {
-		g.lineRanges[0] = newLineRange(gl)
-	}
 	g.glyphs = append(g.glyphs, gl)
 	g.currentLineGlyphs++
 	if len(g.positions) == 0 {
@@ -162,7 +124,6 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 	needsNewLine := gl.Flags&text.FlagLineBreak != 0
 	needsNewRun := gl.Flags&text.FlagRunBreak != 0
 	breaksParagraph := gl.Flags&text.FlagParagraphBreak != 0
-	startParagraph := gl.Flags&text.FlagParagraphStart != 0
 	breaksCluster := gl.Flags&text.FlagClusterBreak != 0
 	// We should insert new positions if the glyph we're processing terminates
 	// a glyph cluster, has nonzero runes, and is not a hard newline.
@@ -184,15 +145,6 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 	}
 
 	g.midCluster = !breaksCluster
-
-	if startParagraph {
-		g.lineRanges = append(g.lineRanges, newLineRange(gl))
-	} else {
-		// the line may not have a line break, so we update the end of the logical line range on
-		// each coming glyph
-		g.lineRanges[len(g.lineRanges)-1].endX = gl.X
-		g.lineRanges[len(g.lineRanges)-1].endY = int(gl.Y)
-	}
 
 	if breaksParagraph {
 		// Paragraph breaking clusters shouldn't have positions generated for both
@@ -248,6 +200,9 @@ func (g *glyphIndex) Glyph(gl text.Glyph) {
 			descent: g.positions[len(g.positions)-1].descent,
 			glyphs:  g.currentLineGlyphs,
 		})
+
+		//log.Printf("[%d] found new line: %s", len(g.screenLines), g.screenLines[len(g.screenLines)-1])
+
 		g.pos.lineCol.line++
 		g.pos.lineCol.col = 0
 		g.pos.runIndex = 0
@@ -300,13 +255,6 @@ func (g *glyphIndex) closestToLineCol(lineCol screenPos) combinedPos {
 	return next
 }
 
-func dist(a, b fixed.Int26_6) fixed.Int26_6 {
-	if a > b {
-		return a - b
-	}
-	return b - a
-}
-
 func (g *glyphIndex) closestToXY(x fixed.Int26_6, y int) combinedPos {
 	if len(g.positions) == 0 {
 		return combinedPos{}
@@ -343,39 +291,6 @@ func (g *glyphIndex) closestToXY(x fixed.Int26_6, y int) combinedPos {
 		}
 	}
 	return g.positions[closest]
-}
-
-func newLineRange(gl text.Glyph) lineRange {
-	return lineRange{startX: gl.X, startY: int(gl.Y), endX: gl.X, endY: int(gl.Y)}
-}
-
-// makeRegion creates a text-aligned rectangle from start to end. The vertical
-// dimensions of the rectangle are derived from the provided line's ascent and
-// descent, and the y offset of the line's baseline is provided as y.
-func makeRegion(line lineInfo, y int, start, end fixed.Int26_6) Region {
-	if start > end {
-		start, end = end, start
-	}
-	dotStart := image.Pt(start.Round(), y)
-	dotEnd := image.Pt(end.Round(), y)
-	return Region{
-		Bounds: image.Rectangle{
-			Min: dotStart.Sub(image.Point{Y: line.ascent.Ceil()}),
-			Max: dotEnd.Add(image.Point{Y: line.descent.Floor()}),
-		},
-		Baseline: line.descent.Floor(),
-	}
-}
-
-// Region describes the position and baseline of an area of interest within
-// shaped text.
-type Region struct {
-	// Bounds is the coordinates of the bounding box relative to the containing
-	// widget.
-	Bounds image.Rectangle
-	// Baseline is the quantity of vertical pixels between the baseline and
-	// the bottom of bounds.
-	Baseline int
 }
 
 // locate returns highlight regions covering the glyphs that represent the runes in
@@ -469,73 +384,9 @@ func (g *glyphIndex) locate(viewport image.Rectangle, startRune, endRune int, re
 	return rects
 }
 
-// graphemeReader segments paragraphs of text into grapheme clusters.
-type graphemeReader struct {
-	segmenter.Segmenter
-	graphemes  []int
-	paragraph  []rune
-	source     io.ReaderAt
-	cursor     int64
-	reader     *bufio.Reader
-	runeOffset int
-}
-
-// SetSource configures the reader to pull from source.
-func (p *graphemeReader) SetSource(source io.ReaderAt) {
-	p.source = source
-	p.cursor = 0
-	p.reader = bufio.NewReader(p)
-	p.runeOffset = 0
-}
-
-// Read exists to satisfy io.Reader. It should not be directly invoked.
-func (p *graphemeReader) Read(b []byte) (int, error) {
-	n, err := p.source.ReadAt(b, p.cursor)
-	p.cursor += int64(n)
-	return n, err
-}
-
-// next decodes one paragraph of rune data.
-func (p *graphemeReader) next() ([]rune, bool) {
-	p.paragraph = p.paragraph[:0]
-	var err error
-	var r rune
-	for err == nil {
-		r, _, err = p.reader.ReadRune()
-		if err != nil {
-			break
-		}
-		p.paragraph = append(p.paragraph, r)
-		if r == '\n' {
-			break
-		}
+func dist(a, b fixed.Int26_6) fixed.Int26_6 {
+	if a > b {
+		return a - b
 	}
-	return p.paragraph, err == nil
-}
-
-// Graphemes will return the next paragraph's grapheme cluster boundaries,
-// if any. If it returns an empty slice, there is no more data (all paragraphs
-// have been segmented).
-func (p *graphemeReader) Graphemes() []int {
-	var more bool
-	p.graphemes = p.graphemes[:0]
-	p.paragraph, more = p.next()
-	if len(p.paragraph) == 0 && !more {
-		return nil
-	}
-	p.Segmenter.Init(p.paragraph)
-	iter := p.Segmenter.GraphemeIterator()
-	if iter.Next() {
-		graph := iter.Grapheme()
-		p.graphemes = append(p.graphemes,
-			p.runeOffset+graph.Offset,
-			p.runeOffset+graph.Offset+len(graph.Text),
-		)
-	}
-	for iter.Next() {
-		graph := iter.Grapheme()
-		p.graphemes = append(p.graphemes, p.runeOffset+graph.Offset+len(graph.Text))
-	}
-	p.runeOffset += len(p.paragraph)
-	return p.graphemes
+	return b - a
 }

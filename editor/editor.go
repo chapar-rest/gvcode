@@ -24,29 +24,8 @@ import (
 	"github.com/oligo/gvcode/buffer"
 )
 
-// TextRange contains the range of text of interest in the document. It can used for
-// search, styling text, or any other purposes.
-type TextRange struct {
-	// offset of the start rune in the document.
-	Start int
-	// offset of the end rune in the document.
-	End int
-}
-
-// TextStyle defines style for a range of text in the document.
-type TextStyle struct {
-	TextRange
-	// Color of the text..
-	Color op.CallOp
-	// Background color of the painted text in the range.
-	Background op.CallOp
-}
-
 // Editor implements an editable and scrollable text area.
 type Editor struct {
-	// text manages the text buffer and provides shaping and cursor positioning
-	// services.
-	text textView
 	// Alignment controls the alignment of text within the editor.
 	Alignment text.Alignment
 	// LineHeight determines the gap between baselines of text. If zero, a sensible
@@ -64,6 +43,9 @@ type Editor struct {
 	// InputHint specifies the type of on-screen keyboard to be displayed.
 	InputHint key.InputHint
 
+	// text manages the text buffer and provides shaping and cursor positioning
+	// services.
+	text       textView
 	buffer     buffer.TextSource
 	textStyles []*TextStyle
 	// Match ranges in rune offset, for text search.
@@ -73,7 +55,7 @@ type Editor struct {
 	// scratch is a byte buffer that is reused to efficiently read portions of text
 	// from the textView.
 	scratch []byte
-	// regions is a region buffer for text hightlighting purpose.
+	// regions is a region buffer.
 	regions []Region
 
 	blinkStart time.Time
@@ -137,6 +119,8 @@ func (e *Editor) initBuffer() {
 		e.buffer = buffer.NewTextSource()
 		e.text.SetSource(e.buffer)
 	}
+
+	e.text.CaretWidth = unit.Dp(1)
 	e.text.Alignment = e.Alignment
 	e.text.LineHeight = e.LineHeight
 	e.text.LineHeightScale = e.LineHeightScale
@@ -404,7 +388,6 @@ func (e *Editor) undo() (EditorEvent, bool) {
 	}
 
 	e.SetCaret(end, start)
-	e.text.invalidate()
 	return ChangeEvent{}, true
 }
 
@@ -424,15 +407,11 @@ func (e *Editor) redo() (EditorEvent, bool) {
 	}
 
 	e.SetCaret(end, start)
-
 	return ChangeEvent{}, true
 }
 
 // replace the text between start and end with s. Indices are in runes.
 // It returns the number of runes inserted.
-// addHistory controls whether this modification is recorded in the undo
-// history. replace can modify text in positions unrelated to the cursor
-// position.
 func (e *Editor) replace(start, end int, s string) int {
 	length := e.text.Len()
 	if start > end {
@@ -535,9 +514,9 @@ func (e *Editor) deleteWord(distance int) (deletedRunes int) {
 		off := e.text.ByteOffset(idx)
 		var r rune
 		if direction < 0 {
-			r, _, _ = e.buffer.ReadRuneBefore(int64(off))
+			r, _, _ = e.buffer.ReadRuneBeforeBytes(int64(off))
 		} else {
-			r, _, _ = e.buffer.ReadRuneAt(int64(off))
+			r, _, _ = e.buffer.ReadRuneAtBytes(int64(off))
 		}
 		return r
 	}

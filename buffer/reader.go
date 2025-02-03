@@ -85,6 +85,32 @@ func (r *PieceTableReader) Text(buf []byte) []byte {
 	return buf
 }
 
+func (r *PieceTableReader) Lines() int {
+	return len(r.PieceTable.lines)
+}
+
+func (r *PieceTableReader) ReadLine(lineNum int) (line []byte, runeOff int, err error) {
+	if lineNum >= len(r.PieceTable.lines) {
+		return nil, 0, io.EOF
+	}
+
+	lineLen := 0
+	for i, lineInfo := range r.PieceTable.lines {
+		if i >= lineNum {
+			lineLen = lineInfo.length
+			break
+		}
+
+		runeOff += lineInfo.length
+	}
+
+	startBytes := r.RuneOffset(runeOff)
+	endBytes := r.RuneOffset(runeOff + lineLen)
+	line = make([]byte, endBytes-startBytes)
+	r.ReadAt(line, int64(startBytes))
+	return
+}
+
 // RuneOffset returns the byte offset for the rune at position runeOff.
 func (r *PieceTableReader) RuneOffset(runeOff int) int {
 	if r.seqLength == 0 {
@@ -111,12 +137,20 @@ func (r *PieceTableReader) RuneOffset(runeOff int) int {
 	return bytes
 }
 
+// Need optimization
+func (r *PieceTableReader) ReadRuneAt(runeOff int64) (rune, error) {
+	bytesOff := r.RuneOffset(int(runeOff))
+
+	c, _, err := r.ReadRuneAtBytes(int64(bytesOff))
+	return c, err
+}
+
 // ReadRuneAt reads the rune starting at the given byte offset, if any.
-func (r *PieceTableReader) ReadRuneAt(off int64) (rune, int, error) {
+func (r *PieceTableReader) ReadRuneAtBytes(off int64) (rune, int, error) {
 	var buf [utf8.UTFMax]byte
 	b := buf[:]
 	n, err := r.ReadAt(b, off)
-	if errors.Is(err, io.EOF) && n>0 {
+	if errors.Is(err, io.EOF) && n > 0 {
 		err = nil
 	}
 	b = b[:n]
@@ -125,7 +159,7 @@ func (r *PieceTableReader) ReadRuneAt(off int64) (rune, int, error) {
 }
 
 // ReadRuneAt reads the run prior to the given byte offset, if any.
-func (r *PieceTableReader) ReadRuneBefore(off int64) (rune, int, error) {
+func (r *PieceTableReader) ReadRuneBeforeBytes(off int64) (rune, int, error) {
 	var buf [utf8.UTFMax]byte
 	b := buf[:]
 	if off < utf8.UTFMax {
