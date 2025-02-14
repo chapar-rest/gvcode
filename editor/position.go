@@ -9,28 +9,9 @@ import (
 	"image"
 	"io"
 
-	"gioui.org/text"
 	"github.com/go-text/typesetting/segmenter"
 	"golang.org/x/image/math/fixed"
 )
-
-// screen line info
-type lineInfo struct {
-	xOff            fixed.Int26_6
-	yOff            int
-	width           fixed.Int26_6
-	ascent, descent fixed.Int26_6
-	glyphs          int
-}
-
-// lineRange contains the pixel coordinates of the start and end position
-// of the logical line.
-type lineRange struct {
-	startX fixed.Int26_6
-	startY int
-	endX   fixed.Int26_6
-	endY   int
-}
 
 // screenPos represents a character position in text line and column numbers,
 // not pixels.
@@ -54,7 +35,7 @@ type combinedPos struct {
 	ascent, descent fixed.Int26_6
 
 	// runIndex tracks which run this position is within, counted each time
-	// the index processes an end of run marker.
+	// we processes an end of run marker.
 	runIndex int
 	// towardOrigin tracks whether this glyph's run is progressing toward the
 	// origin or away from it.
@@ -66,18 +47,10 @@ func (c combinedPos) String() string {
 		c.runes, c.lineCol.line, c.lineCol.col, c.x.Ceil(), c.y, c.ascent.Ceil(), c.descent.Ceil(), c.runIndex)
 }
 
-func (li lineInfo) String() string {
-	return fmt.Sprintf("[lineInfo] xOff: %d, yOff: %d, width: %d, glyphs: %d", li.xOff.Round(), li.yOff, li.width.Ceil(), li.glyphs)
-}
-
-func newLineRange(start, end text.Glyph) lineRange {
-	return lineRange{startX: start.X, startY: int(start.Y), endX: end.X, endY: int(end.Y)}
-}
-
 // makeRegion creates a text-aligned rectangle from start to end. The vertical
 // dimensions of the rectangle are derived from the provided line's ascent and
 // descent, and the y offset of the line's baseline is provided as y.
-func makeRegion(line lineInfo, y int, start, end fixed.Int26_6) Region {
+func makeRegion(line *line, y int, start, end fixed.Int26_6) Region {
 	if start > end {
 		start, end = end, start
 	}

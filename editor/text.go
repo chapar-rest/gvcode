@@ -12,7 +12,6 @@ import (
 	"gioui.org/op"
 	"gioui.org/text"
 	"gioui.org/unit"
-	"github.com/go-text/typesetting/segmenter"
 	"github.com/oligo/gvcode/buffer"
 	"golang.org/x/exp/slices"
 	"golang.org/x/image/math/fixed"
@@ -76,13 +75,15 @@ type textView struct {
 	// scrolled offset relative to the start of dims.
 	scrollOff image.Point
 
-	index glyphIndex
+	layouter textLayout
+
+	//index glyphIndex
 	// graphemes tracks the indices of grapheme cluster boundaries within text source.
-	graphemes []int
-	seg       segmenter.Segmenter
+	//graphemes []int
+	//seg       segmenter.Segmenter
 
 	// // paragraphReader is used to populate graphemes.
-	paragraphReader graphemeReader
+	//paragraphReader graphemeReader
 
 	// The layout is valid or not. Invalid layout requires a re-layout.
 	valid bool
@@ -95,6 +96,7 @@ type textView struct {
 // must be done before invoking any other methods on Text.
 func (e *textView) SetSource(source buffer.TextSource) {
 	e.src = source
+	e.layouter = newTextLayout(e.src)
 	e.invalidate()
 }
 
@@ -124,18 +126,18 @@ func (e *textView) makeValid() {
 
 func (e *textView) closestToRune(runeIdx int) combinedPos {
 	e.makeValid()
-	pos, _ := e.index.closestToRune(runeIdx)
+	pos, _ := e.layouter.closestToRune(runeIdx)
 	return pos
 }
 
 func (e *textView) closestToLineCol(line, col int) combinedPos {
 	e.makeValid()
-	return e.index.closestToLineCol(screenPos{line: line, col: col})
+	return e.layouter.closestToLineCol(screenPos{line: line, col: col})
 }
 
 func (e *textView) closestToXY(x fixed.Int26_6, y int) combinedPos {
 	e.makeValid()
-	return e.index.closestToXY(x, y)
+	return e.layouter.closestToXY(x, y)
 }
 
 func (e *textView) closestToXYGraphemes(x fixed.Int26_6, y int) combinedPos {
@@ -372,13 +374,13 @@ func (e *textView) MovePages(pages int, selAct selectionAction) {
 // moveByGraphemes returns the rune index resulting from moving the
 // specified number of grapheme clusters from startRuneidx.
 func (e *textView) moveByGraphemes(startRuneidx, graphemes int) int {
-	if len(e.graphemes) == 0 {
+	if len(e.layouter.graphemes) == 0 {
 		return startRuneidx
 	}
-	startGraphemeIdx, _ := slices.BinarySearch(e.graphemes, startRuneidx)
+	startGraphemeIdx, _ := slices.BinarySearch(e.layouter.graphemes, startRuneidx)
 	startGraphemeIdx = max(startGraphemeIdx+graphemes, 0)
-	startGraphemeIdx = min(startGraphemeIdx, len(e.graphemes)-1)
-	startRuneIdx := e.graphemes[startGraphemeIdx]
+	startGraphemeIdx = min(startGraphemeIdx, len(e.layouter.graphemes)-1)
+	startRuneIdx := e.layouter.graphemes[startGraphemeIdx]
 	return e.closestToRune(startRuneIdx).runes
 }
 
@@ -581,7 +583,7 @@ func (e *textView) Regions(start, end int, regions []Region) []Region {
 		Min: e.scrollOff,
 		Max: e.viewSize.Add(e.scrollOff),
 	}
-	return e.index.locate(viewport, start, end, regions)
+	return e.layouter.locate(viewport, start, end, regions)
 }
 
 func absFixed(i fixed.Int26_6) fixed.Int26_6 {

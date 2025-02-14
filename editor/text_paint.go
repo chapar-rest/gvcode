@@ -1,10 +1,7 @@
 package editor
 
 import (
-	"bufio"
 	"image"
-	"io"
-	"log"
 	"math"
 	"sort"
 
@@ -27,170 +24,9 @@ func (e *textView) calculateViewSize(gtx layout.Context) image.Point {
 	return gtx.Constraints.Constrain(base)
 }
 
-func (e *textView) layoutText2(lt *text.Shaper) {
-	e.src.Seek(0, io.SeekStart)
-	var r io.Reader = e.src
-
-	e.index.reset()
-	it := textIterator{viewport: image.Rectangle{Max: image.Point{X: math.MaxInt, Y: math.MaxInt}}}
-	if lt != nil {
-		lt.Layout(e.params, r)
-		for {
-			g, ok := lt.NextGlyph()
-			if !it.processGlyph(g, ok) {
-				break
-			}
-			e.index.Glyph(g)
-		}
-	} else {
-		// Make a fake glyph for every rune in the reader.
-		b := bufio.NewReader(r)
-		for _, _, err := b.ReadRune(); err != io.EOF; _, _, err = b.ReadRune() {
-			g := text.Glyph{Runes: 1, Flags: text.FlagClusterBreak}
-			_ = it.processGlyph(g, true)
-			e.index.Glyph(g)
-		}
-	}
-
-	e.paragraphReader.SetSource(e.src)
-	e.graphemes = e.graphemes[:0]
-	for g := e.paragraphReader.Graphemes(); len(g) > 0; g = e.paragraphReader.Graphemes() {
-		if len(e.graphemes) > 0 && g[0] == e.graphemes[len(e.graphemes)-1] {
-			g = g[1:]
-		}
-		e.graphemes = append(e.graphemes, g...)
-	}
-	dims := layout.Dimensions{Size: it.bounds.Size()}
-	dims.Baseline = dims.Size.Y - it.baseline
-	e.dims = dims
-
-}
-
-
 func (e *textView) layoutText(shaper *text.Shaper) {
-	e.src.Seek(0, io.SeekStart)
-	e.index.reset()
-	e.graphemes = e.graphemes[:0]
-
-	it := textIterator{viewport: image.Rectangle{Max: image.Point{X: math.MaxInt, Y: math.MaxInt}}}
-
-	if shaper == nil {
-		e.fakeLayout(&it)
-	} else {
-		if e.src.Len() == 0 {
-			shaper.LayoutString(e.params, "")
-			for {
-				g, ok := shaper.NextGlyph()
-				if !it.processGlyph(g, ok) {
-					break
-				}
-				e.index.TrackLine(g)
-				e.index.Glyph(g)
-			}
-		} else {
-			e.layoutByParagraph(shaper, &it)
-		}
-	}
-
-	dims := layout.Dimensions{Size: it.bounds.Size()}
-	dims.Baseline = dims.Size.Y - it.baseline
-	e.dims = dims
-}
-
-func (e *textView) layoutByParagraph(shaper *text.Shaper, it *textIterator) {
-	linesCnt := e.src.Lines()
-	log.Println("lines count: ", linesCnt)
-	// Paragraph index.
-	line := 0
-	// Y offset in the document coordination of the next paragraph.
-	paragraphOffset := 0
-	// runeOffset in the buffer.
-	runeOffset := 0
-
-	log.Printf("==============================================================================Refresh layout==============================================================================")
-	for paragraph, _, err := e.src.ReadLine(line); err == nil; paragraph, _, err = e.src.ReadLine(line) {
-		log.Printf("-----------------> paragraph #%d: %s", line, string(paragraph))
-
-		shaper.LayoutString(e.params, string(paragraph))
-		for {
-			g, ok := shaper.NextGlyph()
-			if !ok {
-				break
-			}
-
-			isLineEnd := g.Flags&text.FlagLineBreak != 0
-			isParagraphStart := g.Flags&text.FlagParagraphStart != 0
-
-			// modify glyph to align with the paragraph offset.
-			if paragraphOffset > 0 {
-				g.Y = int32(paragraphOffset)
-			}
-
-			if !it.processGlyph(g, ok) {
-				break
-			}
-
-			e.index.TrackLine(g)
-
-			// A paragraph with a hard new line will have another glyph indicating a new paragraph.
-			// This is usually useless as the next non-empty paragraph will have real glyphs to show.
-			if isParagraphStart && line != linesCnt-1 {
-				break
-			}
-
-			e.index.Glyph(g)
-
-			// update offset for the next line
-			if isLineEnd && !isParagraphStart {
-				if paragraphOffset == 0 {
-					paragraphOffset = int(g.Y)
-				}
-				paragraphOffset += e.lineHeight.Round()
-			}
-		}
-
-		paragraphRunes := []rune(string(paragraph))
-		e.indexGraphemeCluster(paragraphRunes, runeOffset)
-		runeOffset += len(paragraphRunes)
-		line++
-	}
-	log.Printf("==============================================================================End layout==============================================================================")
-}
-
-func (e *textView) fakeLayout(it *textIterator) {
-	// Make a fake glyph for every rune in the reader.
-	b := bufio.NewReader(e.src)
-	for _, _, err := b.ReadRune(); err != io.EOF; _, _, err = b.ReadRune() {
-		g := text.Glyph{Runes: 1, Flags: text.FlagClusterBreak}
-		_ = it.processGlyph(g, true)
-		e.index.Glyph(g)
-	}
-
-	e.paragraphReader.SetSource(e.src)
-	e.graphemes = e.graphemes[:0]
-	for g := e.paragraphReader.Graphemes(); len(g) > 0; g = e.paragraphReader.Graphemes() {
-		if len(e.graphemes) > 0 && g[0] == e.graphemes[len(e.graphemes)-1] {
-			g = g[1:]
-		}
-		e.graphemes = append(e.graphemes, g...)
-	}
-}
-
-func (e *textView) indexGraphemeCluster(paragraph []rune, runeOffset int) {
-	e.seg.Init(paragraph)
-	iter := e.seg.GraphemeIterator()
-	if iter.Next() {
-		grapheme := iter.Grapheme()
-		e.graphemes = append(e.graphemes,
-			runeOffset+grapheme.Offset,
-			runeOffset+grapheme.Offset+len(grapheme.Text),
-		)
-	}
-	for iter.Next() {
-		grapheme := iter.Grapheme()
-		e.graphemes = append(e.graphemes, runeOffset+grapheme.Offset+len(grapheme.Text))
-	}
-
+	//e.layoutByParagraph(shaper, &it)
+	e.dims = e.layouter.Layout(shaper, &e.params, 4)
 }
 
 // PaintText clips and paints the visible text glyph outlines using the provided
@@ -202,32 +38,25 @@ func (e *textView) PaintText(gtx layout.Context, material op.CallOp, textStyles 
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
-	it := textIterator{
+	tp := textPainter{
 		viewport: viewport,
+		styles:   textStyles,
 	}
 
-	startGlyph := 0
-	for _, line := range e.index.screenLines {
-		if line.descent.Ceil()+line.yOff >= viewport.Min.Y {
+	for _, line := range e.layouter.lines {
+		if line.descent.Ceil()+line.yOff < viewport.Min.Y {
+			continue
+		}
+		if line.yOff-line.ascent.Floor() > viewport.Max.Y {
 			break
 		}
-		startGlyph += line.glyphs
-	}
-	var glyphs [32]glyphStyle
-	line := glyphs[:0]
-	start := startGlyph
-	for _, g := range e.index.glyphs[startGlyph:] {
-		var ok bool
 
-		if line, ok = it.paintGlyph(gtx, e.shaper, e.styleForGlyph(g, material, textStyles), line); !ok {
-			break
-		}
-		start++
+		tp.paintLine(gtx, e.shaper, line, material)
 	}
 
 	call := m.Stop()
-	viewport.Min = viewport.Min.Add(it.padding.Min)
-	viewport.Max = viewport.Max.Add(it.padding.Max)
+	viewport.Min = viewport.Min.Add(tp.padding.Min)
+	viewport.Max = viewport.Max.Add(tp.padding.Max)
 	defer clip.Rect(viewport.Sub(e.scrollOff)).Push(gtx.Ops).Pop()
 	call.Add(gtx.Ops)
 }
@@ -238,7 +67,7 @@ func (e *textView) PaintSelection(gtx layout.Context, material op.CallOp) {
 	localViewport := image.Rectangle{Max: e.viewSize}
 	docViewport := image.Rectangle{Max: e.viewSize}.Add(e.scrollOff)
 	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
-	e.regions = e.index.locate(docViewport, e.caret.start, e.caret.end, e.regions)
+	e.regions = e.layouter.locate(docViewport, e.caret.start, e.caret.end, e.regions)
 	//log.Println("regions count: ", len(e.regions), e.regions)
 	expandEmptyRegion := len(e.regions) > 1
 	for _, region := range e.regions {
@@ -267,25 +96,25 @@ func (e *textView) PaintRegions(gtx layout.Context, regions []Region, material o
 	}
 }
 
-// caretCurrentLine returns the current logical line that the carent is in.
+// caretCurrentLine returns the current paragraph that the carent is in.
 // Only the start position is checked.
 func (e *textView) caretCurrentLine() (start combinedPos, end combinedPos) {
 	caretStart := e.closestToRune(e.caret.start)
-	if len(e.index.lineRanges) <= 0 {
+	if len(e.layouter.lineRanges) <= 0 {
 		return caretStart, caretStart
 	}
 
-	lineIdx := sort.Search(len(e.index.lineRanges), func(i int) bool {
-		rng := e.index.lineRanges[i]
+	lineIdx := sort.Search(len(e.layouter.lineRanges), func(i int) bool {
+		rng := e.layouter.lineRanges[i]
 		return rng.startY >= caretStart.y
 	})
 
 	// No exsiting lines found.
-	if lineIdx == len(e.index.lineRanges) {
+	if lineIdx == len(e.layouter.lineRanges) {
 		return caretStart, caretStart
 	}
 
-	line := e.index.lineRanges[lineIdx]
+	line := e.layouter.lineRanges[lineIdx]
 	start = e.closestToXY(line.startX, line.startY)
 	end = e.closestToXY(line.endX, line.endY)
 
@@ -320,7 +149,7 @@ func (e *textView) PaintLineNumber(gtx layout.Context, lt *text.Shaper, material
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
-	dims := paintLineNumber(gtx, lt, e.params, viewport, e.index.lineRanges, material)
+	dims := paintLineNumber(gtx, lt, e.params, viewport, e.layouter.lineRanges, material)
 	call := m.Stop()
 
 	rect := viewport.Sub(e.scrollOff)
@@ -381,33 +210,4 @@ func (e *textView) adjustPadding(bounds image.Rectangle) image.Rectangle {
 	bounds.Min.Y -= adjust
 	bounds.Max.Y += leading - adjust
 	return bounds
-}
-
-func (e *textView) styleForGlyph(g text.Glyph, detaultMaterial op.CallOp, styles []*TextStyle) glyphStyle {
-	gs := glyphStyle{g: g}
-
-	pos := e.index.closestToXY(g.X, int(g.Y))
-	idx := sort.Search(len(styles), func(i int) bool {
-		s := styles[i]
-		return s.Start > pos.runes
-	})
-
-	if idx >= len(styles) {
-		gs.fg = detaultMaterial
-		return gs
-	}
-
-	if idx > 0 {
-		idx--
-	}
-
-	style := styles[idx]
-	gs.fg = style.Color
-	gs.bg = style.Background
-
-	if style.Color == (op.CallOp{}) {
-		gs.fg = detaultMaterial
-	}
-
-	return gs
 }
