@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"log"
 	"math"
 	"sort"
 
@@ -73,8 +72,6 @@ func (tl *textLayout) reset() {
 }
 
 func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWidth int) layout.Dimensions {
-	log.Println("########### document: ", string(tl.src.Text([]byte{})))
-
 	tl.reset()
 	tl.params = *params
 	paragraphCount := tl.src.Lines()
@@ -88,8 +85,6 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 			currentIdx := 0
 
 			for text, _, err := tl.src.ReadLine(currentIdx); err == nil; text, _, err = tl.src.ReadLine(currentIdx) {
-				log.Println("########### paragraph: ", string(text))
-
 				//for text, err := tl.reader.ReadBytes('\n'); err == nil; text, err = tl.reader.ReadBytes('\n') {
 				tl.layoutNextParagraph(shaper, string(text), paragraphCount-1 == currentIdx, tabWidth)
 
@@ -109,16 +104,16 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 		for idx, line := range tl.lines {
 			tl.indexGlyphs(idx, line)
 			tl.updateBounds(line)
-			log.Printf("line[%d]: %s", idx, line)
+			//log.Printf("line[%d]: %s", idx, line)
 
 		}
 
 		tl.trackLines(tl.lines)
 
-		log.Println("positions: >>>>>>")
-		for _, pos := range tl.positions {
-			log.Println("-------> ", pos)
-		}
+		// log.Println("positions: >>>>>>")
+		// for _, pos := range tl.positions {
+		// 	log.Println("-------> ", pos)
+		// }
 	}
 
 	dims := layout.Dimensions{Size: tl.bounds.Size()}
@@ -127,22 +122,20 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 }
 
 func (tl *textLayout) layoutNextParagraph(shaper *text.Shaper, paragraph string, isLastParagrah bool, tabWidth int) {
-	tabStopInterval := tl.spaceGlyph.Advance.Mul(fixed.I(tabWidth))
-
 	params := tl.params
 	maxWidth := params.MaxWidth
 	params.MaxWidth = math.MaxInt
 	shaper.LayoutString(params, paragraph)
 
-	lines := tl.wrapParagraph(glyphIter{shaper: shaper}, []rune(paragraph), maxWidth, tabStopInterval, &tl.spaceGlyph)
+	lines := tl.wrapParagraph(glyphIter{shaper: shaper}, []rune(paragraph), maxWidth, tabWidth, &tl.spaceGlyph)
 	if len(lines) > 0 && !isLastParagrah {
 		lines = lines[:len(lines)-1]
 	}
 	tl.lines = append(tl.lines, lines...)
 }
 
-func (tl *textLayout) wrapParagraph(glyphs glyphIter, paragraph []rune, maxWidth int, tabStopInterval fixed.Int26_6, spaceGlyph *text.Glyph) []*line {
-	return tl.wrapper.WrapParagraph(glyphs.All(), paragraph, maxWidth, tabStopInterval, spaceGlyph)
+func (tl *textLayout) wrapParagraph(glyphs glyphIter, paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) []*line {
+	return tl.wrapper.WrapParagraph(glyphs.All(), paragraph, maxWidth, tabWidth, spaceGlyph)
 }
 
 func (tl *textLayout) fakeLayout() {

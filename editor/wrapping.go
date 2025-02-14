@@ -89,7 +89,7 @@ func (b *glyphReader) next() *text.Glyph {
 	}
 
 	b.buf = append(b.buf, gl)
-	return &gl
+	return &b.buf[len(b.buf)-1]
 }
 
 func (b *glyphReader) get() []text.Glyph {
@@ -126,10 +126,10 @@ type lineWrapper struct {
 	glyphBuf    glyphReader
 }
 
-func (w *lineWrapper) setup(nextGlyph func() (text.Glyph, bool), paragraph []rune, maxWidth int, tabStopInterval fixed.Int26_6, spaceGlyph *text.Glyph) {
+func (w *lineWrapper) setup(nextGlyph func() (text.Glyph, bool), paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) {
 	w.breaker = newBreaker(&w.seg, paragraph)
 	w.maxWidth = maxWidth
-	w.tabStopInterval = tabStopInterval
+	w.tabStopInterval = spaceGlyph.Advance.Mul(fixed.I(tabWidth))
 	w.spaceGlyph = spaceGlyph
 	w.currentLine = line{}
 	w.glyphBuf.nextGlyph = nextGlyph
@@ -137,10 +137,10 @@ func (w *lineWrapper) setup(nextGlyph func() (text.Glyph, bool), paragraph []run
 	w.runeOff = 0
 }
 
-func (w *lineWrapper) WrapParagraph(glyphsIter iter.Seq[text.Glyph], paragraph []rune, maxWidth int, tabStopInterval fixed.Int26_6, spaceGlyph *text.Glyph) []*line {
+func (w *lineWrapper) WrapParagraph(glyphsIter iter.Seq[text.Glyph], paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) []*line {
 	nextGlyph, stop := iter.Pull(glyphsIter)
 	defer stop()
-	w.setup(nextGlyph, paragraph, maxWidth, tabStopInterval, spaceGlyph)
+	w.setup(nextGlyph, paragraph, maxWidth, tabWidth, spaceGlyph)
 
 	lines := make([]*line, 0)
 
@@ -172,28 +172,24 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) line {
 		}
 	}
 
-	var state wrapState
-
 	for {
 		// try to break at each word boundaries.
 		breakAtIdx, ok := w.breaker.nextWordBreak()
 		if !ok {
-			state = wrapEnd
 			break
 		}
 
+		log.Println("break index: ", string(paragraph), breakAtIdx)
 		wordOk := w.readToNextBreak(breakAtIdx, paragraph)
 		if !wordOk {
 			// A single word already exceeds the maxWidth. We have to break inside the word
 			// to keep it fit the line width, otherwise it will overflow.
-			state = wrapWordOverflow
 			w.breaker.markPrevUnread()
 			break
 		}
 
 		// check if the line will exceeds the maxWidth if we put the glyph in the current line.
 		if w.currentLine.width+w.glyphBuf.advance() > fixed.I(w.maxWidth) {
-			state = wrapLineOverflow
 			break
 		}
 
@@ -204,8 +200,6 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) line {
 	if len(w.currentLine.glyphs) > 0 {
 		return w.currentLine
 	}
-
-	log.Println("state", state)
 
 	for {
 		// try to break at grapheme cluster boundaries.
@@ -229,21 +223,18 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) line {
 
 	}
 
+	if len(w.currentLine.glyphs) > 0 {
+		return w.currentLine
+	}
+
 	for {
 		gl := w.glyphBuf.next()
 		if gl == nil {
 			break
 		}
 
-		isStart := gl.Flags&text.FlagParagraphStart != 0
-		log.Println("is start of paragraph: ", isStart)
-
 		w.currentLine.append(w.glyphBuf.buf...)
-		log.Println("[1]current line*******: ", w.currentLine)
-
 		w.glyphBuf.reset()
-		log.Println("[2]current line*******: ", w.currentLine)
-
 	}
 
 	return w.currentLine
@@ -263,7 +254,8 @@ func (w *lineWrapper) readToNextBreak(breakAtIdx breakOption, paragraph []rune) 
 			isTab := paragraph[w.runeOff-1] == '\t'
 			if isTab {
 				// the rune is a tab, expand it before line wrapping.
-				w.expandTabGlyph(gl)
+				w.expandTabGlyph(w.currentLine.width+w.glyphBuf.advance()-gl.Advance, gl)
+				log.Println("expanded tab!!!!", gl.Advance.Ceil())
 			}
 		}
 
@@ -278,10 +270,9 @@ func (w *lineWrapper) readToNextBreak(breakAtIdx breakOption, paragraph []rune) 
 }
 
 // expandTabGlyph expand the tab to the next tab stop.
-func (w *lineWrapper) expandTabGlyph(gl *text.Glyph) {
-	nextTabStop := (w.currentLine.width/w.tabStopInterval + 1) * w.tabStopInterval
-	advance := nextTabStop - w.currentLine.width
-	gl.Advance = advance
+func (w *lineWrapper) expandTabGlyph(lineWidth fixed.Int26_6, gl *text.Glyph) {
+	nextTabStop := (lineWidth/w.tabStopInterval + 1) * w.tabStopInterval
+	gl.Advance = nextTabStop - lineWidth
 	gl.Offset = fixed.Point26_6{}
 	gl.ID = w.spaceGlyph.ID
 	gl.Ascent = w.spaceGlyph.Ascent
