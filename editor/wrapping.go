@@ -179,7 +179,6 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) line {
 			break
 		}
 
-		log.Println("break index: ", string(paragraph), breakAtIdx)
 		wordOk := w.readToNextBreak(breakAtIdx, paragraph)
 		if !wordOk {
 			// A single word already exceeds the maxWidth. We have to break inside the word
@@ -278,12 +277,3 @@ func (w *lineWrapper) expandTabGlyph(lineWidth fixed.Int26_6, gl *text.Glyph) {
 	gl.Ascent = w.spaceGlyph.Ascent
 	gl.Descent = w.spaceGlyph.Descent
 }
-
-type wrapState uint8
-
-const (
-	wrapNoFit wrapState = iota
-	wrapWordOverflow
-	wrapLineOverflow
-	wrapEnd
-)

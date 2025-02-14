@@ -26,7 +26,7 @@ func (e *textView) calculateViewSize(gtx layout.Context) image.Point {
 
 func (e *textView) layoutText(shaper *text.Shaper) {
 	//e.layoutByParagraph(shaper, &it)
-	e.dims = e.layouter.Layout(shaper, &e.params, 4)
+	e.dims = e.layouter.Layout(shaper, &e.params, e.TabWidth)
 }
 
 // PaintText clips and paints the visible text glyph outlines using the provided

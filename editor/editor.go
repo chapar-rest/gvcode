@@ -43,6 +43,17 @@ type Editor struct {
 	// InputHint specifies the type of on-screen keyboard to be displayed.
 	InputHint key.InputHint
 
+	// SoftTab controls the behaviour when user try to insert a Tab character.
+	// If set to true, the editor will insert the amount of space characters specified by
+	// TabWidth, else the editor insert a \t character.
+	SoftTab bool
+	// TabWidth set how many spaces to represent a tab character. In the case of
+	// soft tab, this determines the number of space characters to insert into the editor.
+	// While for hard tab, this controls the maximum width of the 'tab' glyph to expand to.
+	TabWidth int
+	// LineNumberGutter specifies the gap between the line number and the main text.
+	LineNumberGutter unit.Dp
+
 	// text manages the text buffer and provides shaping and cursor positioning
 	// services.
 	text       textView
@@ -121,6 +132,7 @@ func (e *Editor) initBuffer() {
 	}
 
 	e.text.CaretWidth = unit.Dp(1)
+	e.text.TabWidth = e.TabWidth
 	e.text.Alignment = e.Alignment
 	e.text.LineHeight = e.LineHeight
 	e.text.LineHeightScale = e.LineHeightScale
@@ -187,7 +199,12 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 			return e.text.PaintLineNumber(gtx, lt, lineNumberMaterial)
 		}),
 
-		layout.Rigid(layout.Spacer{Width: unit.Dp(24)}.Layout),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if e.LineNumberGutter <= 0 {
+				e.LineNumberGutter = unit.Dp(24)
+			}
+			return layout.Spacer{Width: e.LineNumberGutter}.Layout(gtx)
+		}),
 
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			e.text.Layout(gtx, lt, font, size)

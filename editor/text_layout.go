@@ -198,13 +198,16 @@ func (tl *textLayout) shapeRune(shaper *text.Shaper, params text.Parameters, r r
 func (tl *textLayout) indexGraphemeCluster(paragraph []rune, runeOffset int) {
 	tl.seg.Init(paragraph)
 	iter := tl.seg.GraphemeIterator()
-	if iter.Next() {
-		grapheme := iter.Grapheme()
-		tl.graphemes = append(tl.graphemes,
-			runeOffset+grapheme.Offset,
-			runeOffset+grapheme.Offset+len(grapheme.Text),
-		)
+	if len(tl.graphemes) == 0 {
+		if iter.Next() {
+			grapheme := iter.Grapheme()
+			tl.graphemes = append(tl.graphemes,
+				runeOffset+grapheme.Offset,
+				runeOffset+grapheme.Offset+len(grapheme.Text),
+			)
+		}
 	}
+
 	for iter.Next() {
 		grapheme := iter.Grapheme()
 		tl.graphemes = append(tl.graphemes, runeOffset+grapheme.Offset+len(grapheme.Text))
@@ -239,8 +242,8 @@ func (tl *textLayout) trackLines(lines []*line) {
 			lastGlyph = l.glyphs[len(l.glyphs)-1]
 			rng.end(lastGlyph)
 		} else {
-			lastGly := l.glyphs[len(l.glyphs)-1]
-			rng.end(lastGly)
+			lastGlyph = l.glyphs[len(l.glyphs)-1]
+			rng.end(lastGlyph)
 		}
 
 		if lastGlyph.Flags&text.FlagParagraphBreak != 0 {

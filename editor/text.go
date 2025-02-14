@@ -63,6 +63,9 @@ type textView struct {
 	WrapPolicy text.WrapPolicy
 	CaretWidth unit.Dp
 
+	// TabWidth set how many spaces to represent a tab character .
+	TabWidth int
+
 	src    buffer.TextSource
 	params text.Parameters
 	shaper *text.Shaper
