@@ -2,7 +2,6 @@ package editor
 
 import (
 	"iter"
-	"log"
 
 	"gioui.org/text"
 	"github.com/go-text/typesetting/segmenter"
@@ -167,8 +166,6 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) line {
 		if !w.glyphBuf.overflow {
 			w.currentLine.append(w.glyphBuf.buf...)
 			w.glyphBuf.reset()
-		} else {
-
 		}
 	}
 
@@ -254,7 +251,6 @@ func (w *lineWrapper) readToNextBreak(breakAtIdx breakOption, paragraph []rune) 
 			if isTab {
 				// the rune is a tab, expand it before line wrapping.
 				w.expandTabGlyph(w.currentLine.width+w.glyphBuf.advance()-gl.Advance, gl)
-				log.Println("expanded tab!!!!", gl.Advance.Ceil())
 			}
 		}
 

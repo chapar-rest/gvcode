@@ -104,16 +104,11 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 		for idx, line := range tl.lines {
 			tl.indexGlyphs(idx, line)
 			tl.updateBounds(line)
-			//log.Printf("line[%d]: %s", idx, line)
+			// log.Printf("line[%d]: %s", idx, line)
 
 		}
 
 		tl.trackLines(tl.lines)
-
-		// log.Println("positions: >>>>>>")
-		// for _, pos := range tl.positions {
-		// 	log.Println("-------> ", pos)
-		// }
 	}
 
 	dims := layout.Dimensions{Size: tl.bounds.Size()}

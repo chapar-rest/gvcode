@@ -90,7 +90,7 @@ func (li *line) getGlyphs(offset, count int) []text.Glyph {
 }
 
 // lineRange contains the pixel coordinates of the start and end position
-// of the logical line.
+// of the paragraph.
 type lineRange struct {
 	startX fixed.Int26_6
 	startY int

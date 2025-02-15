@@ -106,7 +106,7 @@ func (e *textView) caretCurrentLine() (start combinedPos, end combinedPos) {
 
 	lineIdx := sort.Search(len(e.layouter.lineRanges), func(i int) bool {
 		rng := e.layouter.lineRanges[i]
-		return rng.startY >= caretStart.y
+		return rng.endY >= caretStart.y
 	})
 
 	// No exsiting lines found.
