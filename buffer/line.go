@@ -161,7 +161,9 @@ func (li *lineIndex) applyInsert(runeIndex int, newLines []lineInfo) {
 		// Prepare for splitting and merging
 		splitLeft := runeIndex - currentRuneCount
 
-		if splitLeft >= 0 {
+		if splitLeft <= 0 {
+			li.lines = slices.Insert(li.lines, insertionIndex, newLines...)
+		} else {
 			if len(newLines) == 1 && !newLines[0].hasLineBreak {
 				// just merge the new fragment.
 				li.lines[insertionIndex].length += newLines[0].length
@@ -251,14 +253,7 @@ func (li *lineIndex) applyDelete(runeIndex int, length int) []lineInfo {
 				li.lines[endIndex] = lineInfo{length: leftPart, hasLineBreak: false}
 			}
 		} else {
-			// split into 3 parts
-			newLine := lineInfo{length: rightPartLen, hasLineBreak: li.lines[endIndex].hasLineBreak}
-			li.lines[endIndex] = lineInfo{length: leftPart, hasLineBreak: false}
-			if endIndex+1 < len(li.lines) {
-				li.lines = slices.Insert(li.lines, endIndex+1, newLine)
-			} else {
-				li.lines = append(li.lines, newLine)
-			}
+			li.lines[endIndex].length = li.lines[endIndex].length - length
 		}
 
 		return removedLines

@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"sort"
+	"strings"
 
 	"gioui.org/layout"
 	"gioui.org/text"
@@ -65,6 +66,7 @@ func (tl *textLayout) calcLineHeight(params *text.Parameters) fixed.Int26_6 {
 // reset prepares the index for reuse.
 func (tl *textLayout) reset() {
 	tl.src.Seek(0, io.SeekStart)
+	tl.reader.Reset(tl.src)
 	tl.positions = tl.positions[:0]
 	tl.lines = tl.lines[:0]
 	tl.lineRanges = tl.lineRanges[:0]
@@ -84,14 +86,21 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 			runeOffset := 0
 			currentIdx := 0
 
-			for text, _, err := tl.src.ReadLine(currentIdx); err == nil; text, _, err = tl.src.ReadLine(currentIdx) {
-				//for text, err := tl.reader.ReadBytes('\n'); err == nil; text, err = tl.reader.ReadBytes('\n') {
-				tl.layoutNextParagraph(shaper, string(text), paragraphCount-1 == currentIdx, tabWidth)
+			for {
+				text, readErr := tl.reader.ReadBytes('\n')
+				// the last line returned by ReadBytes returns EOF and may have remaining bytes to process.
+				if len(text) > 0 {
+					tl.layoutNextParagraph(shaper, string(text), paragraphCount-1 == currentIdx, tabWidth)
 
-				paragraphRunes := []rune(string(text))
-				tl.indexGraphemeCluster(paragraphRunes, runeOffset)
-				runeOffset += len(paragraphRunes)
-				currentIdx++
+					paragraphRunes := []rune(string(text))
+					tl.indexGraphemeCluster(paragraphRunes, runeOffset)
+					runeOffset += len(paragraphRunes)
+					currentIdx++
+				}
+
+				if readErr != nil {
+					break
+				}
 			}
 		} else {
 			tl.layoutNextParagraph(shaper, "", true, tabWidth)
@@ -123,9 +132,10 @@ func (tl *textLayout) layoutNextParagraph(shaper *text.Shaper, paragraph string,
 	shaper.LayoutString(params, paragraph)
 
 	lines := tl.wrapParagraph(glyphIter{shaper: shaper}, []rune(paragraph), maxWidth, tabWidth, &tl.spaceGlyph)
-	if len(lines) > 0 && !isLastParagrah {
+	if strings.HasSuffix(paragraph, "\n") && len(lines) > 0 && !isLastParagrah {
 		lines = lines[:len(lines)-1]
 	}
+
 	tl.lines = append(tl.lines, lines...)
 }
 

@@ -11,7 +11,9 @@ var _ TextSource = (*PieceTableReader)(nil)
 // PieceTableReader implements a [TextSource].
 type PieceTableReader struct {
 	*PieceTable
-
+	// Index of the slice saves the continuous line number starting from zero.
+	// The value contains the rune length of the line.
+	lines      []lineInfo
 	lastPiece  *piece
 	seekCursor int64
 }
@@ -86,7 +88,25 @@ func (r *PieceTableReader) Text(buf []byte) []byte {
 }
 
 func (r *PieceTableReader) Lines() int {
-	return len(r.PieceTable.lines)
+	r.lines = r.lines[:0]
+	for n := r.PieceTable.pieces.Head(); n != r.PieceTable.pieces.tail; n = n.next {
+		pieceText := r.PieceTable.getBuf(n.source).getTextByRange(n.byteOff, n.byteLength)
+		lines := r.parseLine(pieceText)
+		if len(lines) > 0 {
+			if len(r.lines) > 0 {
+				lastLine := r.lines[len(r.lines)-1]
+				if !lastLine.hasLineBreak {
+					// merge with lastLine
+					lines[0].length += lastLine.length
+					r.lines = r.lines[:len(r.lines)-1]
+				}
+			}
+
+			r.lines = append(r.lines, lines...)
+		}
+	}
+
+	return len(r.lines)
 }
 
 func (r *PieceTableReader) ReadLine(lineNum int) (line []byte, runeOff int, err error) {
@@ -172,6 +192,26 @@ func (r *PieceTableReader) ReadRuneBeforeBytes(off int64) (rune, int, error) {
 	b = b[:n]
 	c, s := utf8.DecodeLastRune(b)
 	return c, s, err
+}
+
+func (r *PieceTableReader) parseLine(text []byte) []lineInfo {
+	var lines []lineInfo
+
+	n := 0
+	for _, c := range string(text) {
+		n++
+		if c == lineBreak {
+			lines = append(lines, lineInfo{length: n, hasLineBreak: true})
+			n = 0
+		}
+	}
+
+	// The remaining bytes that don't end with a line break.
+	if n > 0 {
+		lines = append(lines, lineInfo{length: n})
+	}
+
+	return lines
 }
 
 func NewTextSource() *PieceTableReader {
