@@ -54,15 +54,25 @@ type Editor struct {
 	// LineNumberGutter specifies the gap between the line number and the main text.
 	LineNumberGutter unit.Dp
 
+	// Color used to paint text
+	TextMaterial op.CallOp
+	// Color used to highlight the selections.
+	SelectMaterial op.CallOp
+	// Color used to highlight the current paragraph.
+	LineMaterial op.CallOp
+	// Color used to paint the line number
+	LineNumberMaterial op.CallOp
+	// Color used to highlight the text snippets, such as search matches.
+	TextHighlightMaterial op.CallOp
+
 	// text manages the text buffer and provides shaping and cursor positioning
 	// services.
 	text       textView
 	buffer     buffer.TextSource
 	textStyles []*TextStyle
-	// Match ranges in rune offset, for text search.
-	matches []TextRange
-	// Index of the current [TextRange].
-	currentMatch int
+	// highlights specifies the text to be highlighted using text ranges.
+	highlights []TextRange
+
 	// scratch is a byte buffer that is reused to efficiently read portions of text
 	// from the textView.
 	scratch []byte
@@ -171,8 +181,7 @@ func (e *Editor) Update(gtx layout.Context) (EditorEvent, bool) {
 // Layout lays out the editor using the provided textMaterial as the paint material
 // for the text glyphs+caret and the selectMaterial as the paint material for the
 // selection rectangle.
-func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp,
-	textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, matchMaterial op.CallOp, lineNumberMaterial op.CallOp) layout.Dimensions {
+func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp) layout.Dimensions {
 	for {
 		_, ok := e.Update(gtx)
 		if !ok {
@@ -196,7 +205,7 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 		Axis: layout.Horizontal,
 	}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return e.text.PaintLineNumber(gtx, lt, lineNumberMaterial)
+			return e.text.PaintLineNumber(gtx, lt, e.LineNumberMaterial)
 		}),
 
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -208,13 +217,13 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			e.text.Layout(gtx, lt, font, size)
-			return e.layout(gtx, textMaterial, selectMaterial, lineMaterial, matchMaterial)
+			return e.layout(gtx)
 		}),
 	)
 
 }
 
-func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.CallOp, lineMaterial op.CallOp, rangeMaterial op.CallOp) layout.Dimensions {
+func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
 	pointer.CursorText.Add(gtx.Ops)
 	event.Op(gtx.Ops, e)
@@ -238,13 +247,13 @@ func (e *Editor) layout(gtx layout.Context, textMaterial, selectMaterial op.Call
 	}
 	semantic.Editor.Add(gtx.Ops)
 	if e.Len() > 0 {
-		e.paintSelection(gtx, selectMaterial)
-		e.paintLineHighlight(gtx, lineMaterial)
-		e.paintTextRanges(gtx, rangeMaterial)
-		e.paintText(gtx, textMaterial)
+		e.paintSelection(gtx, e.SelectMaterial)
+		e.paintLineHighlight(gtx, e.LineMaterial)
+		e.paintTextRanges(gtx, e.TextHighlightMaterial)
+		e.paintText(gtx, e.TextMaterial)
 	}
 	if gtx.Enabled() {
-		e.paintCaret(gtx, textMaterial)
+		e.paintCaret(gtx, e.TextMaterial)
 	}
 	return layout.Dimensions{Size: gtx.Constraints.Max}
 }
@@ -278,13 +287,10 @@ func (e *Editor) paintLineHighlight(gtx layout.Context, material op.CallOp) {
 	e.text.paintLineHighlight(gtx, material)
 }
 
-// SetMatches sets the matched text ranges after a find operation.
-func (e *Editor) SetMatches(matches []TextRange) {
-	e.matches = matches
+// SetHighlights sets the texts to be highlighted.
+func (e *Editor) SetHighlights(highlights []TextRange) {
+	e.highlights = highlights
 	e.ClearSelection()
-	if len(matches) > 0 {
-		e.currentMatch = 0
-	}
 }
 
 func (e *Editor) paintTextRanges(gtx layout.Context, material op.CallOp) {
@@ -292,23 +298,14 @@ func (e *Editor) paintTextRanges(gtx layout.Context, material op.CallOp) {
 
 	e.regions = e.regions[:0]
 	rg := make([]Region, 0)
-	for _, match := range e.matches {
+	for _, txt := range e.highlights {
 		rg = rg[:0]
-		e.regions = append(e.regions, e.text.Regions(match.Start, match.End, rg)...)
+		e.regions = append(e.regions, e.text.Regions(txt.Start, txt.End, rg)...)
 	}
 
-	e.text.PaintRegions(gtx, e.regions, material)
-}
-
-// NextMatch is used to switch between the [TextRange]s. This also selects the next match and causes
-// the selection background drawn under the matched text.
-func (e *Editor) NextMatch(index int) {
-	if index < 0 || index >= len(e.matches) {
-		return
+	if len(e.regions) > 0 {
+		e.text.PaintRegions(gtx, e.regions, material)
 	}
-
-	e.currentMatch = index
-	e.SetCaret(e.matches[e.currentMatch].Start, e.matches[e.currentMatch].End)
 }
 
 // Len is the length of the editor contents, in runes.
@@ -454,13 +451,10 @@ func (e *Editor) replace(start, end int, s string) int {
 	return sc
 }
 
-// ReplaceAll assumes a context of "Find & Replace". newStr applies
-// to a list of text [TextRange], and the matched text is replaced
-// with newStr one by one. The number of replacement is saved to be
-// used during undo/redo.
+// ReplaceAll replaces all texts specifed in TextRange with newStr.
 // It returns the number of occurrences replaced.
-func (e *Editor) ReplaceAll(newStr string) int {
-	if len(e.matches) <= 0 {
+func (e *Editor) ReplaceAll(texts []TextRange, newStr string) int {
+	if len(texts) <= 0 {
 		return 0
 	}
 
@@ -468,15 +462,15 @@ func (e *Editor) ReplaceAll(newStr string) int {
 	// each replace.
 	e.buffer.GroupOp()
 	finalPos := 0
-	for idx := len(e.matches) - 1; idx >= 0; idx-- {
-		start, end := e.matches[idx].Start, e.matches[idx].End
+	for idx := len(texts) - 1; idx >= 0; idx-- {
+		start, end := texts[idx].Start, texts[idx].End
 		e.replace(start, end, newStr)
 		finalPos = start
 	}
 	e.buffer.UnGroupOp()
 
 	e.SetCaret(finalPos, finalPos)
-	return len(e.matches)
+	return len(texts)
 }
 
 // MoveCaret moves the caret (aka selection start) and the selection end
@@ -584,12 +578,6 @@ func (e *Editor) SelectedText() string {
 func (e *Editor) ClearSelection() {
 	e.initBuffer()
 	e.text.ClearSelection()
-}
-
-// Regions returns visible regions covering the rune range [start,end).
-func (e *Editor) Regions(start, end int, regions []Region) []Region {
-	e.initBuffer()
-	return e.text.Regions(start, end, regions)
 }
 
 // returns start and end offset ratio of viewport

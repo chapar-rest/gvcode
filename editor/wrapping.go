@@ -266,7 +266,11 @@ func (w *lineWrapper) readToNextBreak(breakAtIdx breakOption, paragraph []rune) 
 
 // expandTabGlyph expand the tab to the next tab stop.
 func (w *lineWrapper) expandTabGlyph(lineWidth fixed.Int26_6, gl *text.Glyph) {
-	nextTabStop := (lineWidth/w.tabStopInterval + 1) * w.tabStopInterval
+	tabStopInterval := w.tabStopInterval
+	if tabStopInterval <= 0 {
+		tabStopInterval = gl.Advance
+	}
+	nextTabStop := (lineWidth/tabStopInterval + 1) * tabStopInterval
 	gl.Advance = nextTabStop - lineWidth
 	gl.Offset = fixed.Point26_6{}
 	gl.ID = w.spaceGlyph.ID

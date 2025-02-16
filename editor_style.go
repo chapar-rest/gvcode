@@ -21,7 +21,12 @@ type EditorStyle struct {
 	// LineHeightScale applies a scaling factor to the LineHeight. If zero, a
 	// sensible default will be used.
 	LineHeightScale float32
-	TextSize        unit.Sp
+	// TabWidth set how many spaces to represent a tab character.
+	TabWidth int
+	// TextSize set the text size.
+	TextSize unit.Sp
+	// TextWeight set the text weight.
+	TextWeight font.Weight
 	// Color is the text color.
 	Color color.NRGBA
 	// SelectionColor is the color of the background for selected text.
@@ -29,12 +34,11 @@ type EditorStyle struct {
 	//LineHighlightColor is the color used to highlight the clicked logical line.
 	// If not set, line will not be highlighted.
 	LineHighlightColor color.NRGBA
-	// TextMatchColor use the color used to highlight the matched substring.
-	TextMatchColor color.NRGBA
-
+	// TextHighlightColor use the color used to highlight the interested substring.
+	TextHighlightColor color.NRGBA
 	// Gap size between the line number bar and the main text area.
-	LineNumberPadding unit.Dp
-	LineNumberColor   color.NRGBA
+	LineNumberGutter unit.Dp
+	LineNumberColor  color.NRGBA
 
 	Editor *editor.Editor
 	shaper *text.Shaper
@@ -48,13 +52,13 @@ func NewEditor(th *material.Theme, editor *editor.Editor) EditorStyle {
 			Typeface: th.Face,
 		},
 		LineHeightScale:    1.2,
+		TabWidth:           4,
 		TextSize:           th.TextSize,
 		Color:              th.Fg,
 		SelectionColor:     mulAlpha(th.ContrastBg, 0x60),
 		LineHighlightColor: mulAlpha(th.ContrastBg, 0x30),
-		TextMatchColor:     mulAlpha(th.ContrastBg, 0x80),
 		LineNumberColor:    mulAlpha(th.Fg, 0xb6),
-		LineNumberPadding:  unit.Dp(24),
+		LineNumberGutter:   unit.Dp(24),
 	}
 
 	return es
@@ -74,9 +78,9 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	paint.ColorOp{Color: e.LineHighlightColor}.Add(gtx.Ops)
 	lineColor := lineColorMacro.Stop()
 
-	matchColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: e.TextMatchColor}.Add(gtx.Ops)
-	matchColor := matchColorMacro.Stop()
+	textHighlightColorMacro := op.Record(gtx.Ops)
+	paint.ColorOp{Color: e.TextHighlightColor}.Add(gtx.Ops)
+	textHighlightColor := textHighlightColorMacro.Stop()
 
 	lineNumColorMacro := op.Record(gtx.Ops)
 	paint.ColorOp{Color: e.LineNumberColor}.Add(gtx.Ops)
@@ -84,8 +88,17 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 
 	e.Editor.LineHeight = e.LineHeight
 	e.Editor.LineHeightScale = e.LineHeightScale
+	e.Editor.LineNumberGutter = e.LineNumberGutter
+	e.Editor.TabWidth = e.TabWidth
+	e.Editor.TextMaterial = textColor
+	e.Editor.SelectMaterial = selectionColor
+	e.Editor.LineMaterial = lineColor
+	e.Editor.LineNumberMaterial = lineNumColor
+	e.Editor.TextHighlightMaterial = textHighlightColor
 
-	return e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize, textColor, selectionColor, lineColor, matchColor, lineNumColor)
+	e.Font.Weight = e.TextWeight
+
+	return e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize)
 }
 
 func blendDisabledColor(disabled bool, c color.NRGBA) color.NRGBA {
