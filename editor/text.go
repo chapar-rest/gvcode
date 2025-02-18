@@ -181,17 +181,26 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 		e.params.Font = font
 		e.params.PxPerEm = textSize
 	}
-	maxWidth := gtx.Constraints.Max.X
+	if e.WrapLine != wrapLine {
+		e.WrapLine = wrapLine
+		e.invalidate()
+	}
 
+	maxWidth := gtx.Constraints.Max.X
 	minWidth := gtx.Constraints.Min.X
 	if maxWidth != e.params.MaxWidth {
 		e.params.MaxWidth = maxWidth
-		e.invalidate()
+		if e.WrapLine {
+			e.invalidate()
+		}
 	}
 	if minWidth != e.params.MinWidth {
 		e.params.MinWidth = minWidth
-		e.invalidate()
+		if e.WrapLine {
+			e.invalidate()
+		}
 	}
+
 	if lt != e.shaper {
 		e.shaper = lt
 		e.invalidate()
@@ -201,10 +210,6 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 		e.invalidate()
 	}
 
-	if e.WrapLine != wrapLine {
-		e.WrapLine = wrapLine
-		e.invalidate()
-	}
 	if lh := fixed.I(gtx.Sp(e.LineHeight)); lh != e.params.LineHeight {
 		e.params.LineHeight = lh
 		e.invalidate()
@@ -220,8 +225,11 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 
 	if viewSize := e.calculateViewSize(gtx); viewSize != e.viewSize {
 		e.viewSize = viewSize
-		e.invalidate()
+		if e.WrapLine {
+			e.invalidate()
+		}
 	}
+
 	e.makeValid()
 }
 
