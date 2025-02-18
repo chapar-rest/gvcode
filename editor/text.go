@@ -59,12 +59,10 @@ type textView struct {
 	// LineHeightScale applies a scaling factor to the LineHeight. If zero, a default
 	// value 1.2 will be used.
 	LineHeightScale float32
-	// WrapPolicy configures how displayed text will be broken into lines.
-	WrapPolicy text.WrapPolicy
-	CaretWidth unit.Dp
-
+	CaretWidth      unit.Dp
 	// TabWidth set how many spaces to represent a tab character .
 	TabWidth int
+	WrapLine bool
 
 	src    buffer.TextSource
 	params text.Parameters
@@ -77,16 +75,7 @@ type textView struct {
 	lineHeight fixed.Int26_6
 	// scrolled offset relative to the start of dims.
 	scrollOff image.Point
-
-	layouter textLayout
-
-	//index glyphIndex
-	// graphemes tracks the indices of grapheme cluster boundaries within text source.
-	//graphemes []int
-	//seg       segmenter.Segmenter
-
-	// // paragraphReader is used to populate graphemes.
-	//paragraphReader graphemeReader
+	layouter  textLayout
 
 	// The layout is valid or not. Invalid layout requires a re-layout.
 	valid bool
@@ -179,7 +168,7 @@ func (e *textView) MoveLines(distance int, selAct selectionAction) {
 }
 
 // Layout the text, reshaping it as necessary.
-func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp) {
+func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp, wrapLine bool) {
 	e.params.DisableSpaceTrim = true
 
 	if e.params.Locale != gtx.Locale {
@@ -212,8 +201,8 @@ func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, s
 		e.invalidate()
 	}
 
-	if e.WrapPolicy != e.params.WrapPolicy {
-		e.params.WrapPolicy = e.WrapPolicy
+	if e.WrapLine != wrapLine {
+		e.WrapLine = wrapLine
 		e.invalidate()
 	}
 	if lh := fixed.I(gtx.Sp(e.LineHeight)); lh != e.params.LineHeight {
@@ -266,7 +255,7 @@ func (e *textView) Len() int {
 }
 
 func (e *textView) ScrollBounds() image.Rectangle {
-	return image.Rectangle{Max: image.Point{Y: e.dims.Size.Y - e.viewSize.Y}}
+	return image.Rectangle{Max: image.Point{X: e.dims.Size.X - e.viewSize.X, Y: e.dims.Size.Y - e.viewSize.Y}}
 }
 
 func (e *textView) ScrollRel(dx, dy int) {

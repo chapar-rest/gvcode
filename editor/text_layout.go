@@ -71,9 +71,10 @@ func (tl *textLayout) reset() {
 	tl.lines = tl.lines[:0]
 	tl.lineRanges = tl.lineRanges[:0]
 	tl.graphemes = tl.graphemes[:0]
+	tl.bounds = image.Rectangle{}
 }
 
-func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWidth int) layout.Dimensions {
+func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWidth int, wrapLine bool) layout.Dimensions {
 	tl.reset()
 	tl.params = *params
 	paragraphCount := tl.src.Lines()
@@ -90,7 +91,7 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 				text, readErr := tl.reader.ReadBytes('\n')
 				// the last line returned by ReadBytes returns EOF and may have remaining bytes to process.
 				if len(text) > 0 {
-					tl.layoutNextParagraph(shaper, string(text), paragraphCount-1 == currentIdx, tabWidth)
+					tl.layoutNextParagraph(shaper, string(text), paragraphCount-1 == currentIdx, tabWidth, wrapLine)
 
 					paragraphRunes := []rune(string(text))
 					tl.indexGraphemeCluster(paragraphRunes, runeOffset)
@@ -103,7 +104,7 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 				}
 			}
 		} else {
-			tl.layoutNextParagraph(shaper, "", true, tabWidth)
+			tl.layoutNextParagraph(shaper, "", true, tabWidth, wrapLine)
 		}
 
 		tl.calculateXOffsets(tl.lines)
@@ -125,10 +126,13 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 	return dims
 }
 
-func (tl *textLayout) layoutNextParagraph(shaper *text.Shaper, paragraph string, isLastParagrah bool, tabWidth int) {
+func (tl *textLayout) layoutNextParagraph(shaper *text.Shaper, paragraph string, isLastParagrah bool, tabWidth int, wrapLine bool) {
 	params := tl.params
 	maxWidth := params.MaxWidth
-	params.MaxWidth = math.MaxInt
+	params.MaxWidth = 1e6
+	if !wrapLine {
+		maxWidth = params.MaxWidth
+	}
 	shaper.LayoutString(params, paragraph)
 
 	lines := tl.wrapParagraph(glyphIter{shaper: shaper}, []rune(paragraph), maxWidth, tabWidth, &tl.spaceGlyph)
@@ -357,15 +361,13 @@ func (tl *textLayout) indexGlyphs(idx int, line *line) {
 		if needsNewRun {
 			pos.runIndex++
 		}
-
-		// pos.lineCol.line++
-		// pos.lineCol.col = 0
-		// pos.runIndex = 0
-
 	}
 
 }
 
+// This method and some of the following methods are adapted from the Gio's package gioui.org/widget.
+// Original copyright (c) [Year] (c) 2018-2025 Elias Naur and Gio contributors.
+//
 // incrementPosition returns the next position after pos (if any). Pos _must_ be
 // an unmodified position acquired from one of the closest* methods. If eof is
 // true, there was no next position.

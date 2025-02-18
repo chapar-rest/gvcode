@@ -86,6 +86,9 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	paint.ColorOp{Color: e.LineNumberColor}.Add(gtx.Ops)
 	lineNumColor := lineNumColorMacro.Stop()
 
+	e.Editor.Font = e.Font
+	e.Editor.Font.Weight = e.TextWeight
+	e.Editor.TextSize = e.TextSize
 	e.Editor.LineHeight = e.LineHeight
 	e.Editor.LineHeightScale = e.LineHeightScale
 	e.Editor.LineNumberGutter = e.LineNumberGutter
@@ -96,9 +99,7 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	e.Editor.LineNumberMaterial = lineNumColor
 	e.Editor.TextHighlightMaterial = textHighlightColor
 
-	e.Font.Weight = e.TextWeight
-
-	return e.Editor.Layout(gtx, e.shaper, e.Font, e.TextSize)
+	return e.Editor.Layout(gtx, e.shaper)
 }
 
 func blendDisabledColor(disabled bool, c color.NRGBA) color.NRGBA {

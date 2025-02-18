@@ -47,24 +47,32 @@ func (e *Editor) processEvents(gtx layout.Context) (ev EditorEvent, ok bool) {
 }
 
 func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
-	sbounds := e.text.ScrollBounds()
-	var smin, smax int
-
-	axis := gesture.Vertical
-	smin, smax = sbounds.Min.Y, sbounds.Max.Y
-
 	var scrollX, scrollY pointer.ScrollRange
 	textDims := e.text.FullDimensions()
 	visibleDims := e.text.Dimensions()
+
+	scrollOffX := e.text.ScrollOff().X
+	scrollX.Min = min(-scrollOffX, 0)
+	scrollX.Max = max(0, textDims.Size.X-(scrollOffX+visibleDims.Size.X))
 
 	scrollOffY := e.text.ScrollOff().Y
 	scrollY.Min = -scrollOffY
 	scrollY.Max = max(0, textDims.Size.Y-(scrollOffY+visibleDims.Size.Y))
 
-	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, axis, scrollX, scrollY)
+	sbounds := e.text.ScrollBounds()
 	var soff int
-	e.text.ScrollRel(0, sdist)
-	soff = e.text.ScrollOff().Y
+	var smin, smax int
+
+	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, gesture.Vertical, scrollX, scrollY)
+	if e.scroller.Direction() == gesture.Horizontal {
+		e.text.ScrollRel(sdist, 0)
+		soff = e.text.ScrollOff().X
+		smin, smax = sbounds.Min.X, sbounds.Max.X
+	} else {
+		e.text.ScrollRel(0, sdist)
+		soff = e.text.ScrollOff().Y
+		smin, smax = sbounds.Min.Y, sbounds.Max.Y
+	}
 
 	for {
 		evt, ok := e.clicker.Update(gtx.Source)

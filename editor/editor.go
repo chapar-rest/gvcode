@@ -1,7 +1,3 @@
-// This file is based on the Editor part of package gioui.org/widget.
-//
-// Copyright (c) 2018-2025 Elias Naur and Gio contributors
-
 package editor
 
 import (
@@ -26,6 +22,10 @@ import (
 
 // Editor implements an editable and scrollable text area.
 type Editor struct {
+	// Font set the font used to draw the text.
+	Font font.Font
+	// TextSize set the size of both the main text and line number.
+	TextSize unit.Sp
 	// Alignment controls the alignment of text within the editor.
 	Alignment text.Alignment
 	// LineHeight determines the gap between baselines of text. If zero, a sensible
@@ -34,8 +34,8 @@ type Editor struct {
 	// LineHeightScale is multiplied by LineHeight to determine the final gap
 	// between baselines. If zero, a sensible default will be used.
 	LineHeightScale float32
-	// WrapPolicy configures how displayed text will be broken into lines.
-	WrapPolicy text.WrapPolicy
+	// WrapLine configures whether the displayed text will be broken into lines or not.
+	WrapLine bool
 	// ReadOnly controls whether the contents of the editor can be altered by
 	// user interaction. If set to true, the editor will allow selecting text
 	// and copying it interactively, but not modifying it.
@@ -146,7 +146,6 @@ func (e *Editor) initBuffer() {
 	e.text.Alignment = e.Alignment
 	e.text.LineHeight = e.LineHeight
 	e.text.LineHeightScale = e.LineHeightScale
-	e.text.WrapPolicy = e.WrapPolicy
 }
 
 // Update the state of the editor in response to input events. Update consumes editor
@@ -178,10 +177,7 @@ func (e *Editor) Update(gtx layout.Context) (EditorEvent, bool) {
 	return event, ok
 }
 
-// Layout lays out the editor using the provided textMaterial as the paint material
-// for the text glyphs+caret and the selectMaterial as the paint material for the
-// selection rectangle.
-func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp) layout.Dimensions {
+func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 	for {
 		_, ok := e.Update(gtx)
 		if !ok {
@@ -196,7 +192,6 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 		e.scrollCaret = false
 		e.text.ScrollToCaret()
 	}
-	// visibleDims := e.text.Dimensions()
 
 	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
 	e.scroller.Add(gtx.Ops)
@@ -216,7 +211,7 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, siz
 		}),
 
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			e.text.Layout(gtx, lt, font, size)
+			e.text.Layout(gtx, lt, e.Font, e.TextSize, e.WrapLine)
 			return e.layout(gtx)
 		}),
 	)
@@ -229,7 +224,7 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 	event.Op(gtx.Ops, e)
 	key.InputHintOp{Tag: e, Hint: e.InputHint}.Add(gtx.Ops)
 
-	e.scroller.Add(gtx.Ops)
+	//e.scroller.Add(gtx.Ops)
 
 	e.clicker.Add(gtx.Ops)
 	e.dragger.Add(gtx.Ops)
@@ -458,7 +453,7 @@ func (e *Editor) ReplaceAll(texts []TextRange, newStr string) int {
 		return 0
 	}
 
-	// Traverse in reverse order to prevent match offset changes after
+	// Traverse in reverse order to prevent match offsets from changing after
 	// each replace.
 	e.buffer.GroupOp()
 	finalPos := 0
