@@ -99,7 +99,7 @@ func main() {
 	editorApp.state = &editor.Editor{}
 	editorApp.state.SetText("This is a sample text for demostrating purpose!")
 	// editorApp.state.SetHighlights([]editor.TextRange{{Start: 0, End: 5}})
-	editorApp.state.WrapLine = false
+	editorApp.state.WrapLine = true // Have to set it to true as horizontal scrolling does not work yet.
 
 	go func() {
 		err := editorApp.run()

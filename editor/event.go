@@ -64,15 +64,16 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 	var smin, smax int
 
 	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, gesture.Vertical, scrollX, scrollY)
-	if e.scroller.Direction() == gesture.Horizontal {
-		e.text.ScrollRel(sdist, 0)
-		soff = e.text.ScrollOff().X
-		smin, smax = sbounds.Min.X, sbounds.Max.X
-	} else {
-		e.text.ScrollRel(0, sdist)
-		soff = e.text.ScrollOff().Y
-		smin, smax = sbounds.Min.Y, sbounds.Max.Y
-	}
+	// Have to wait for the patch to be accepted by Gio dev team.
+	// if e.scroller.Direction() == gesture.Horizontal {
+	// 	e.text.ScrollRel(sdist, 0)
+	// 	soff = e.text.ScrollOff().X
+	// 	smin, smax = sbounds.Min.X, sbounds.Max.X
+	// } else {
+	e.text.ScrollRel(0, sdist)
+	soff = e.text.ScrollOff().Y
+	smin, smax = sbounds.Min.Y, sbounds.Max.Y
+	//}
 
 	for {
 		evt, ok := e.clicker.Update(gtx.Source)

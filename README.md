@@ -1,6 +1,6 @@
 # gvcode
 
-gvcode is an Gio based text editor for code editing.
+gvcode is a Gio based text editor for code editing.
 
 ## Key Features:
 
