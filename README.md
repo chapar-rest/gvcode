@@ -62,6 +62,11 @@ For a full working example, please see code in the folder `./example`.
 This project is a work in progress, and the APIs may change as development continues. Please use it at your own risk.
 
 
+## Contributing
+
+See the [contribution guide](CONTRIBUTING.md) for details.
+
+
 ## Acknowledgments
 
 This project uses code from the [Gio](https://gioui.org/) project, which is licensed under the Unlicense OR MIT License.
