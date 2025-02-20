@@ -366,7 +366,7 @@ func (tl *textLayout) indexGlyphs(idx int, line *line) {
 }
 
 // This method and some of the following methods are adapted from the Gio's package gioui.org/widget.
-// Original copyright (c) [Year] (c) 2018-2025 Elias Naur and Gio contributors.
+// Original copyright (c) 2018-2025 Elias Naur and Gio contributors.
 //
 // incrementPosition returns the next position after pos (if any). Pos _must_ be
 // an unmodified position acquired from one of the closest* methods. If eof is
