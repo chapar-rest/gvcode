@@ -123,10 +123,10 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 
 	idx := sort.Search(len(tp.styles), func(i int) bool {
 		s := tp.styles[i]
-		return s.Start > line.runeOff
+		return s.End > line.runeOff
 	})
 
-	if idx >= len(tp.styles) {
+	if idx == len(tp.styles) {
 		span := glyphSpan{
 			glyphs: text.Range{Count: len(line.glyphs), Offset: 0},
 			fg:     defaultMaterial,
@@ -135,10 +135,6 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 
 		tp.spans = append(tp.spans, span)
 		return
-	}
-
-	if idx > 0 {
-		idx--
 	}
 
 	style := tp.styles[idx]

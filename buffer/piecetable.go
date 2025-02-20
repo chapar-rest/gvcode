@@ -161,6 +161,7 @@ func (pt *PieceTable) Insert(runeIndex int, text string) bool {
 	// special-case: inserting at the end of a prior insertion at a piece boundary.
 	if pt.tryAppendToLastPiece(runeIndex, text) {
 		pt.lineIndex.UpdateOnInsert(runeIndex, []byte(text))
+		pt.changed = true
 		return true
 	}
 
