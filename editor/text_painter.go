@@ -10,6 +10,7 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/text"
+	"golang.org/x/image/math/fixed"
 )
 
 // A glyphSpan is a group of adjacent glyphs sharing the same fg and bg.
@@ -19,7 +20,7 @@ type glyphSpan struct {
 	fg     op.CallOp
 	bg     op.CallOp
 	// offset is an visual offset relative to the start of the line.
-	offset float32
+	offset fixed.Int26_6
 }
 
 // textPainter computes the bounding box of and paints text.
@@ -35,7 +36,7 @@ type textPainter struct {
 	styles []*TextStyle
 
 	// the styling spans of the current line.
-	spans []*glyphSpan
+	spans []glyphSpan
 }
 
 // processGlyph checks whether the glyph is visible within the iterator's configured
@@ -88,7 +89,7 @@ func (tp *textPainter) paintLine(gtx layout.Context, shaper *text.Shaper, line *
 	tp.stylingLine(line, defaultMaterial)
 
 	for _, span := range tp.spans {
-		spanOffset := op.Affine(f32.Affine2D{}.Offset(f32.Point{X: span.offset})).Push(gtx.Ops)
+		spanOffset := op.Affine(f32.Affine2D{}.Offset(f32.Point{X: float32(span.offset.Round())})).Push(gtx.Ops)
 
 		glyphs := line.getGlyphs(span.glyphs.Offset, span.glyphs.Count)
 		// draw background
@@ -132,7 +133,7 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 			offset: 0,
 		}
 
-		tp.spans = append(tp.spans, &span)
+		tp.spans = append(tp.spans, span)
 		return
 	}
 
@@ -145,6 +146,7 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 
 	var fg, bg op.CallOp
 	runeOff := line.runeOff
+	advance := fixed.I(0)
 
 	for glyphIdx, g := range line.glyphs {
 		if style != nil && style.Start <= runeOff && style.End > runeOff {
@@ -157,9 +159,10 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 
 		if span.fg != fg {
 			if span.glyphs.Count > 0 {
-				tp.spans = append(tp.spans, &span)
+				tp.spans = append(tp.spans, span)
 			}
 			span = glyphSpan{}
+			span.offset = advance
 			span.glyphs.Offset = glyphIdx
 			span.fg = fg
 			span.bg = bg
@@ -167,8 +170,9 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 
 		span.glyphs.Count += 1
 		runeOff += int(g.Runes)
+		advance += g.Advance
 
-		if runeOff >= style.End {
+		if style != nil && runeOff >= style.End {
 			idx++
 			if idx < len(tp.styles) {
 				style = tp.styles[idx]
@@ -180,7 +184,7 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 	}
 
 	if span.glyphs.Count > 0 {
-		tp.spans = append(tp.spans, &span)
+		tp.spans = append(tp.spans, span)
 	}
 }
 
@@ -196,7 +200,7 @@ func (s *glyphSpan) bounds(line *line) image.Rectangle {
 	for _, g := range line.glyphs[s.glyphs.Offset : s.glyphs.Offset+s.glyphs.Count] {
 		rect.Min.Y = min(rect.Min.Y, -g.Ascent.Round())
 		rect.Max.Y = max(rect.Max.Y, g.Descent.Round())
-		rect.Max.X += g.Advance.Ceil()
+		rect.Max.X += g.Advance.Round()
 	}
 
 	return rect
