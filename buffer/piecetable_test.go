@@ -219,3 +219,27 @@ func TestErase(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestGroupOp(t *testing.T) {
+	pt := NewPieceTable([]byte(""))
+
+	pt.GroupOp()
+	batchId1 := pt.currentBatch
+
+	{
+		pt.GroupOp()
+		pt.UnGroupOp()
+		batchId2 := pt.currentBatch
+
+		if batchId2 != batchId1 {
+			t.Fail()
+		}
+	}
+
+	pt.UnGroupOp()
+
+	batchId3 := pt.currentBatch
+	if batchId3 == batchId1 {
+		t.Fail()
+	}
+}

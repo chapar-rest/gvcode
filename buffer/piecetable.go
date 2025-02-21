@@ -494,12 +494,17 @@ func (pt *PieceTable) GroupOp() {
 	if pt.currentBatch == nil {
 		pt.currentBatch = new(int)
 	}
+
+	*pt.currentBatch += 1
 }
 
 // Ungroup a batch. Latter insert, earase or replace operations outside of
 // a group is not batched.
 func (pt *PieceTable) UnGroupOp() {
-	pt.currentBatch = nil
+	*pt.currentBatch--
+	if *pt.currentBatch <= 0 {
+		pt.currentBatch = nil
+	}
 }
 
 // Size returns the total length of the document data in runes.
