@@ -1,4 +1,4 @@
-package editor
+package gvcode
 
 import (
 	"fmt"

@@ -43,7 +43,6 @@ func (tb *textBuffer) append(buf []byte) (runeOff int, byteOff int, runeLen int)
 	byteOff = len(tb.buf)
 	runeOff = tb.length
 
-	// FIXME: pre-expand the capacity with fixed size length to improve performance.
 	tb.buf = append(tb.buf, buf...)
 	runeLen = utf8.RuneCount(buf)
 	tb.length += runeLen
@@ -57,9 +56,6 @@ func (tb *textBuffer) bytesForRange(runeIdx int, runeLen int) int {
 	return end - start
 }
 
-func (tb *textBuffer) bytesLen() int {
-	return len(tb.buf)
-}
 
 func (tb *textBuffer) getTextByRange(byteIdx int, size int) []byte {
 	if byteIdx < 0 || byteIdx >= len(tb.buf) {

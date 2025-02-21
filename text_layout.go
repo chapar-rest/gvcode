@@ -1,4 +1,4 @@
-package editor
+package gvcode
 
 import (
 	"bufio"
@@ -94,7 +94,7 @@ func (tl *textLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 					tl.layoutNextParagraph(shaper, string(text), paragraphCount-1 == currentIdx, tabWidth, wrapLine)
 
 					paragraphRunes := []rune(string(text))
-					tl.indexGraphemeCluster(paragraphRunes, runeOffset)
+					tl.indexGraphemeClusters(paragraphRunes, runeOffset)
 					runeOffset += len(paragraphRunes)
 					currentIdx++
 				}
@@ -204,7 +204,7 @@ func (tl *textLayout) shapeRune(shaper *text.Shaper, params text.Parameters, r r
 	return glyph, nil
 }
 
-func (tl *textLayout) indexGraphemeCluster(paragraph []rune, runeOffset int) {
+func (tl *textLayout) indexGraphemeClusters(paragraph []rune, runeOffset int) {
 	tl.seg.Init(paragraph)
 	iter := tl.seg.GraphemeIterator()
 	if len(tl.graphemes) == 0 {

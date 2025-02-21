@@ -17,7 +17,7 @@ import (
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode"
 	"github.com/oligo/gvcode/buffer"
-	"github.com/oligo/gvcode/editor"
+	wg "github.com/oligo/gvcode/widget"
 )
 
 type (
@@ -28,7 +28,7 @@ type (
 type EditorApp struct {
 	window *app.Window
 	th     *material.Theme
-	state  *editor.Editor
+	state  *gvcode.Editor
 }
 
 func (ed *EditorApp) run() error {
@@ -58,7 +58,7 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 		}
 
 		switch evt.(type) {
-		case editor.ChangeEvent:
+		case gvcode.ChangeEvent:
 			styles := HightlightTextByPattern(ed.state.Text(), "sample|demostrating")
 			ed.state.UpdateTextStyles(styles)
 		}
@@ -85,7 +85,7 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 					Left:   unit.Dp(24),
 					Right:  unit.Dp(24),
 				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					es := gvcode.NewEditor(th, ed.state)
+					es := wg.NewEditor(th, ed.state)
 					es.Font.Typeface = "monospace"
 					es.TextSize = unit.Sp(14)
 					es.LineHeightScale = 1.5
@@ -111,7 +111,7 @@ func main() {
 	editorApp.window.Option(app.Title("Basic Example"))
 
 	buffer.SetDebug(false)
-	editorApp.state = &editor.Editor{
+	editorApp.state = &gvcode.Editor{
 		// Have to set it to true as horizontal scrolling does not work yet.
 		WrapLine: true,
 	}
@@ -133,14 +133,14 @@ func main() {
 
 }
 
-func HightlightTextByPattern(text string, pattern string) []*editor.TextStyle {
-	var styles []*editor.TextStyle
+func HightlightTextByPattern(text string, pattern string) []*gvcode.TextStyle {
+	var styles []*gvcode.TextStyle
 
 	re := regexp.MustCompile(pattern)
 	matches := re.FindAllIndex([]byte(text), -1)
 	for _, match := range matches {
-		styles = append(styles, &editor.TextStyle{
-			TextRange: editor.TextRange{
+		styles = append(styles, &gvcode.TextStyle{
+			TextRange: gvcode.TextRange{
 				Start: match[0],
 				End:   match[1],
 			},

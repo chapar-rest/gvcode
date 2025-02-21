@@ -1,6 +1,8 @@
 package buffer
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestLineIndexInsert(t *testing.T) {
 	idx := &lineIndex{}

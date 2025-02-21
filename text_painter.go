@@ -1,4 +1,4 @@
-package editor
+package gvcode
 
 import (
 	"image"
@@ -39,8 +39,8 @@ type textPainter struct {
 	spans []glyphSpan
 }
 
-// processGlyph checks whether the glyph is visible within the iterator's configured
-// viewport and (if so) updates the iterator's text dimensions to include the glyph.
+// processGlyph checks whether the glyph is visible within the configured
+// viewport and (if so) updates the text dimensions to include the glyph.
 func (tp *textPainter) processGlyph(g text.Glyph) (visible bool) {
 	// Compute the maximum extent to which glyphs overhang on the horizontal
 	// axis.

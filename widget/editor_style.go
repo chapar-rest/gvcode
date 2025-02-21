@@ -1,4 +1,4 @@
-package gvcode
+package widget
 
 import (
 	"image/color"
@@ -10,7 +10,7 @@ import (
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget/material"
-	"github.com/oligo/gvcode/editor"
+	"github.com/oligo/gvcode"
 )
 
 type EditorStyle struct {
@@ -40,11 +40,11 @@ type EditorStyle struct {
 	LineNumberGutter unit.Dp
 	LineNumberColor  color.NRGBA
 
-	Editor *editor.Editor
+	Editor *gvcode.Editor
 	shaper *text.Shaper
 }
 
-func NewEditor(th *material.Theme, editor *editor.Editor) EditorStyle {
+func NewEditor(th *material.Theme, editor *gvcode.Editor) EditorStyle {
 	es := EditorStyle{
 		Editor: editor,
 		shaper: th.Shaper,
