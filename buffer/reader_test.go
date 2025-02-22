@@ -44,3 +44,27 @@ func TestReadAt(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestReadRuneAt(t *testing.T) {
+	src := NewTextSource()
+	src.SetText([]byte("hello,world.你好，世界"))
+
+	r, err := src.ReadRuneAt(6)
+	if err != nil {
+		t.Logf("ReadRuneAt error: %v", err)
+		t.Fail()
+	}
+	if r != 'w' {
+		t.Fail()
+	}
+
+	r, err = src.ReadRuneAt(12)
+	if err != nil {
+		t.Logf("ReadRuneAt error: %v", err)
+		t.Fail()
+	}
+	if r != '你' {
+		t.Fail()
+	}
+
+}

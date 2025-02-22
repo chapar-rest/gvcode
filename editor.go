@@ -3,7 +3,6 @@ package gvcode
 import (
 	"image"
 	"time"
-	"unicode"
 
 	"gioui.org/f32"
 	"gioui.org/font"
@@ -64,6 +63,9 @@ type Editor struct {
 	LineNumberMaterial op.CallOp
 	// Color used to highlight the text snippets, such as search matches.
 	TextHighlightMaterial op.CallOp
+	// WordSeperators configures a set of characters that will be used as word separators
+	// when doing word related operations, like navigating or deleting by word.
+	WordSeperators string
 
 	// text manages the text buffer and provides shaping and cursor positioning
 	// services.
@@ -146,6 +148,7 @@ func (e *Editor) initBuffer() {
 	e.text.Alignment = e.Alignment
 	e.text.LineHeight = e.LineHeight
 	e.text.LineHeightScale = e.LineHeightScale
+	e.text.WordSeperators = e.WordSeperators
 }
 
 // Update the state of the editor in response to input events. Update consumes editor
@@ -509,7 +512,7 @@ func (e *Editor) deleteWord(distance int) (deletedRunes int) {
 		idx := caret + runes*direction
 		return idx <= 0 || idx >= e.Len()
 	}
-	// next returns the appropriate rune given the direction and offset in runes).
+	// next returns the appropriate rune given the direction and offset in runes.
 	next := func(runes int) rune {
 		idx := caret + runes*direction
 		if idx < 0 {
@@ -517,20 +520,20 @@ func (e *Editor) deleteWord(distance int) (deletedRunes int) {
 		} else if idx > e.Len() {
 			idx = e.Len()
 		}
-		off := e.text.ByteOffset(idx)
 		var r rune
 		if direction < 0 {
-			r, _, _ = e.buffer.ReadRuneBeforeBytes(int64(off))
+			r, _ = e.buffer.ReadRuneAt(idx - 1)
 		} else {
-			r, _, _ = e.buffer.ReadRuneAtBytes(int64(off))
+			r, _ = e.buffer.ReadRuneAt(idx)
 		}
 		return r
 	}
 	runes := 1
 	for ii := 0; ii < words; ii++ {
 		r := next(runes)
-		wantSpace := unicode.IsSpace(r)
-		for r := next(runes); unicode.IsSpace(r) == wantSpace && !atEnd(runes); r = next(runes) {
+		isSeperator := e.text.isWordSeperator(r)
+
+		for r := next(runes); (isSeperator == e.text.isWordSeperator(r)) && !atEnd(runes); r = next(runes) {
 			runes += 1
 		}
 	}

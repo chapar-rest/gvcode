@@ -13,17 +13,7 @@ type TextSource interface {
 	io.ReaderAt
 
 	// ReadRuneAt reads the rune starting at the given rune offset, if any.
-	ReadRuneAt(runeOff int64) (rune, error)
-
-	// ReadRuneAtBytes reads the rune starting at the given byte offset, if any.
-	// It returns the rune and its width in bytes. If there is an error reading
-	// from the buffer, it is also returned.
-	ReadRuneAtBytes(off int64) (rune, int, error)
-
-	// ReadRuneBeforeBytes reads the run prior to the given byte offset, if any.
-	// It returns the rune and its width in bytes. If there is an error reading
-	// from the buffer, it is also returned.
-	ReadRuneBeforeBytes(off int64) (rune, int, error)
+	ReadRuneAt(runeOff int) (rune, error)
 
 	// RuneOffset returns the byte offset for the rune at position runeIndex.
 	RuneOffset(runeIndex int) int

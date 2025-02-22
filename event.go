@@ -137,8 +137,8 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 			// Process multi-clicks.
 			switch {
 			case evt.NumClicks == 2:
-				e.text.MoveWord(-1, selectionClear)
-				e.text.MoveWord(1, selectionExtend)
+				e.text.MoveWords(-1, selectionClear)
+				e.text.MoveWords(1, selectionExtend)
 				e.dragging = false
 			case evt.NumClicks >= 3:
 				e.text.MoveLineStart(selectionClear)
@@ -364,7 +364,7 @@ func (e *Editor) command(gtx layout.Context, k key.Event) (EditorEvent, bool) {
 		e.text.MoveLines(+1, selAct)
 	case key.NameLeftArrow:
 		if moveByWord {
-			e.text.MoveWord(-1*direction, selAct)
+			e.text.MoveWords(-1*direction, selAct)
 		} else {
 			if selAct == selectionClear {
 				e.text.ClearSelection()
@@ -373,7 +373,7 @@ func (e *Editor) command(gtx layout.Context, k key.Event) (EditorEvent, bool) {
 		}
 	case key.NameRightArrow:
 		if moveByWord {
-			e.text.MoveWord(1*direction, selAct)
+			e.text.MoveWords(1*direction, selAct)
 		} else {
 			if selAct == selectionClear {
 				e.text.ClearSelection()

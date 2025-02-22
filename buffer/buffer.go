@@ -56,7 +56,6 @@ func (tb *textBuffer) bytesForRange(runeIdx int, runeLen int) int {
 	return end - start
 }
 
-
 func (tb *textBuffer) getTextByRange(byteIdx int, size int) []byte {
 	if byteIdx < 0 || byteIdx >= len(tb.buf) {
 		return nil
@@ -65,9 +64,22 @@ func (tb *textBuffer) getTextByRange(byteIdx int, size int) []byte {
 	return tb.buf[byteIdx : byteIdx+size]
 }
 
-func (tb *textBuffer) getTextByRuneRange(runeIdx int, size int) []byte {
+// getTextByRuneRange reads runes starting at the given rune offset.
+func (tb *textBuffer) getTextByRuneRange(runeIdx int, size int) []rune {
 	start := tb.RuneOffset(runeIdx)
 	end := tb.RuneOffset(runeIdx + size)
 
-	return tb.getTextByRange(start, end-start)
+	textBytes := tb.getTextByRange(start, end-start)
+	runes := make([]rune, 0)
+	for {
+		c, s := utf8.DecodeRune(textBytes)
+		if s == 0 {
+			break
+		}
+
+		runes = append(runes, c)
+		textBytes = textBytes[s:]
+	}
+
+	return runes
 }

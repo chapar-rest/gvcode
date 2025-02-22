@@ -3,7 +3,6 @@ package gvcode
 import (
 	"image"
 	"math"
-	"unicode"
 	"unicode/utf8"
 
 	"gioui.org/f32"
@@ -63,6 +62,9 @@ type textView struct {
 	// TabWidth set how many spaces to represent a tab character .
 	TabWidth int
 	WrapLine bool
+	// WordSeperators configures a set of characters that will be used as word separators
+	// when doing word related operations, like navigating or deleting by word.
+	WordSeperators string
 
 	src    buffer.TextSource
 	params text.Parameters
@@ -442,51 +444,7 @@ func (e *textView) MoveLineEnd(selAct selectionAction) {
 	e.clampCursorToGraphemes()
 }
 
-// MoveWord moves the caret to the next word in the specified direction.
-// Positive is forward, negative is backward.
-// Absolute values greater than one will skip that many words.
-// The final caret position will be aligned to a grapheme cluster boundary.
-// BUG(whereswaldon): this method's definition of a "word" is currently
-// whitespace-delimited. Languages that do not use whitespace to delimit
-// words will experience counter-intuitive behavior when navigating by
-// word.
-func (e *textView) MoveWord(distance int, selAct selectionAction) {
-	// split the distance information into constituent parts to be
-	// used independently.
-	words, direction := distance, 1
-	if distance < 0 {
-		words, direction = distance*-1, -1
-	}
-	// atEnd if caret is at either side of the buffer.
-	caret := e.closestToRune(e.caret.start)
-	atEnd := func() bool {
-		return caret.runes == 0 || caret.runes == e.Len()
-	}
-	// next returns the appropriate rune given the direction.
-	next := func() (r rune) {
-		off := e.src.RuneOffset(caret.runes)
-		if direction < 0 {
-			r, _, _ = e.src.ReadRuneBeforeBytes(int64(off))
-		} else {
-			r, _, _ = e.src.ReadRuneAtBytes(int64(off))
-		}
-		return r
-	}
-	for ii := 0; ii < words; ii++ {
-		for r := next(); unicode.IsSpace(r) && !atEnd(); r = next() {
-			e.MoveCaret(direction, 0)
-			caret = e.closestToRune(e.caret.start)
-		}
-		e.MoveCaret(direction, 0)
-		caret = e.closestToRune(e.caret.start)
-		for r := next(); !unicode.IsSpace(r) && !atEnd(); r = next() {
-			e.MoveCaret(direction, 0)
-			caret = e.closestToRune(e.caret.start)
-		}
-	}
-	e.updateSelection(selAct)
-	e.clampCursorToGraphemes()
-}
+
 
 func (e *textView) ScrollToCaret() {
 	caret := e.closestToRune(e.caret.start)
