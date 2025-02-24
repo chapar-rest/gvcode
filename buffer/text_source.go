@@ -18,9 +18,6 @@ type TextSource interface {
 	// RuneOffset returns the byte offset for the rune at position runeIndex.
 	RuneOffset(runeIndex int) int
 
-	//ReadLine reads a line of text from the source. It returns the line as bytes
-	// ,the start rune offset and an optional error if there's any.
-	ReadLine(lineNum int) ([]byte, int, error)
 	// Lines returns the total number of lines/paragraphs of the source.
 	Lines() int
 

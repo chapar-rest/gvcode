@@ -26,6 +26,8 @@ type lineOpStack struct {
 	ops []*lineOp
 }
 
+// Deprecated: We don't need to calculate precise line range anymore.
+//
 // lineIndex manages a line index for the text sequence using a hybrid strategy:
 //  1. update the index when insert or erase occurs in an incremental manner.
 //  2. rebuild the index when undo or redo is triggerred in the PieceTable.

@@ -45,8 +45,6 @@ type PieceTable struct {
 	redoStack *pieceRangeStack
 	// piece list
 	pieces *pieceList
-	// line management
-	lineIndex
 
 	// last action and action position in rune offset in the text sequence.
 	lastAction       action
@@ -80,7 +78,6 @@ func (pt *PieceTable) SetText(text []byte) {
 	pt.redoStack.clear()
 	pt.seqBytes = 0
 	pt.seqLength = 0
-	pt.lineIndex = lineIndex{}
 	pt.lastAction = actionUnknown
 	pt.lastActionEndIdx = 0
 	pt.lastInsertPiece = nil
@@ -109,7 +106,6 @@ func (pt *PieceTable) init(text []byte) {
 	pt.pieces.Append(piece)
 	pt.seqLength = piece.length
 	pt.seqBytes = piece.byteLength
-	pt.lineIndex.UpdateOnInsert(0, text)
 }
 
 func (pt *PieceTable) addToBuffer(source bufSrc, text []byte) (int, int, int) {
@@ -160,7 +156,6 @@ func (pt *PieceTable) Insert(runeIndex int, text string) bool {
 
 	// special-case: inserting at the end of a prior insertion at a piece boundary.
 	if pt.tryAppendToLastPiece(runeIndex, text) {
-		pt.lineIndex.UpdateOnInsert(runeIndex, []byte(text))
 		pt.changed = true
 		return true
 	}
@@ -172,8 +167,7 @@ func (pt *PieceTable) Insert(runeIndex int, text string) bool {
 	} else {
 		pt.insertInMiddle(runeIndex, text, oldPiece, inRuneOff)
 	}
-	// update line index
-	pt.lineIndex.UpdateOnInsert(runeIndex, []byte(text))
+
 	pt.changed = true
 	return true
 }
@@ -304,10 +298,6 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) ([]C
 		return rng.cursor
 	}
 
-	defer func() {
-		pt.lineIndex.Rebuild(pt)
-	}()
-
 	cursors := make([]CursorPos, 0)
 	// remove the next event from the source stack
 	rng := src.peek()
@@ -382,8 +372,6 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 		}
 		bytesErased += startPiece.byteLength - leftByteLen - rightByteLen
 		pt.push2UndoStack(oldPieces, newPieces)
-		// update line index
-		pt.lineIndex.UpdateOnDelete(startOff, endOff-startOff)
 		pt.seqLength -= endOff - startOff
 		pt.seqBytes -= bytesErased
 		return true
@@ -443,8 +431,6 @@ func (pt *PieceTable) Erase(startOff, endOff int) bool {
 
 	// swap link the new piece into the sequence
 	pt.push2UndoStack(oldPieces, newPieces)
-	// update line index
-	pt.lineIndex.UpdateOnDelete(startOff, endOff-startOff)
 	pt.seqLength -= endOff - startOff
 	pt.seqBytes -= bytesErased
 

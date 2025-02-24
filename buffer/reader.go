@@ -107,28 +107,6 @@ func (r *PieceTableReader) Lines() int {
 	return len(r.lines)
 }
 
-func (r *PieceTableReader) ReadLine(lineNum int) (line []byte, runeOff int, err error) {
-	if lineNum >= len(r.PieceTable.lines) {
-		return nil, 0, io.EOF
-	}
-
-	lineLen := 0
-	for i, lineInfo := range r.PieceTable.lines {
-		if i >= lineNum {
-			lineLen = lineInfo.length
-			break
-		}
-
-		runeOff += lineInfo.length
-	}
-
-	startBytes := r.RuneOffset(runeOff)
-	endBytes := r.RuneOffset(runeOff + lineLen)
-	line = make([]byte, endBytes-startBytes)
-	r.ReadAt(line, int64(startBytes))
-	return
-}
-
 // RuneOffset returns the byte offset for the rune at position runeOff.
 func (r *PieceTableReader) RuneOffset(runeOff int) int {
 	if r.seqLength == 0 {
