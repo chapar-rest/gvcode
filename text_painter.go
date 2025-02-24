@@ -155,6 +155,9 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 
 		if span.fg != fg {
 			if span.glyphs.Count > 0 {
+				if span.fg == (op.CallOp{}) {
+					span.fg = defaultMaterial
+				}
 				tp.spans = append(tp.spans, span)
 			}
 			span = glyphSpan{}
@@ -180,6 +183,9 @@ func (tp *textPainter) stylingLine(line *line, defaultMaterial op.CallOp) {
 	}
 
 	if span.glyphs.Count > 0 {
+		if span.fg == (op.CallOp{}) {
+			span.fg = defaultMaterial
+		}
 		tp.spans = append(tp.spans, span)
 	}
 }
