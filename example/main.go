@@ -7,7 +7,6 @@ import (
 	"regexp"
 
 	"gioui.org/app"
-	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/paint"
@@ -30,6 +29,10 @@ type EditorApp struct {
 	th     *material.Theme
 	state  *gvcode.Editor
 }
+
+const (
+	syntaxPattern = "package|import|type|func|struct|for|var|switch|case|if|else"
+)
 
 func (ed *EditorApp) run() error {
 
@@ -59,7 +62,7 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 
 		switch evt.(type) {
 		case gvcode.ChangeEvent:
-			styles := HightlightTextByPattern(ed.state.Text(), "sample|demostrating")
+			styles := HightlightTextByPattern(ed.state.Text(), syntaxPattern)
 			ed.state.UpdateTextStyles(styles)
 		}
 	}
@@ -87,10 +90,9 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					es := wg.NewEditor(th, ed.state)
 					es.Font.Typeface = "monospace"
-					es.TextSize = unit.Sp(14)
+					es.TextSize = unit.Sp(12)
 					es.LineHeightScale = 1.5
 					es.TextHighlightColor = color.NRGBA{R: 120, G: 120, B: 120, A: 200}
-					es.TextWeight = font.Normal
 
 					return es.Layout(gtx)
 				})
@@ -115,9 +117,11 @@ func main() {
 		// Have to set it to true as horizontal scrolling does not work yet.
 		WrapLine: true,
 	}
-	editorApp.state.SetText("This is a sample text for demostrating purpose!")
+
+	thisFile, _ := os.ReadFile("./main.go")
+	editorApp.state.SetText(string(thisFile))
 	// editorApp.state.SetHighlights([]editor.TextRange{{Start: 0, End: 5}})
-	styles := HightlightTextByPattern(editorApp.state.Text(), "sample|demostrating")
+	styles := HightlightTextByPattern(editorApp.state.Text(), syntaxPattern)
 	editorApp.state.UpdateTextStyles(styles)
 
 	go func() {

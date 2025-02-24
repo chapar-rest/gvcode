@@ -25,8 +25,6 @@ type EditorStyle struct {
 	TabWidth int
 	// TextSize set the text size.
 	TextSize unit.Sp
-	// TextWeight set the text weight.
-	TextWeight font.Weight
 	// Color is the text color.
 	Color color.NRGBA
 	// SelectionColor is the color of the background for selected text.
@@ -87,7 +85,6 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	lineNumColor := lineNumColorMacro.Stop()
 
 	e.Editor.Font = e.Font
-	e.Editor.Font.Weight = e.TextWeight
 	e.Editor.TextSize = e.TextSize
 	e.Editor.LineHeight = e.LineHeight
 	e.Editor.LineHeightScale = e.LineHeightScale
