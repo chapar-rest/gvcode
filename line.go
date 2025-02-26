@@ -89,27 +89,40 @@ func (li *line) getGlyphs(offset, count int) []text.Glyph {
 	return out
 }
 
-// lineRange contains the pixel coordinates of the start and end position
+// paragraph contains the pixel coordinates of the start and end position
 // of the paragraph.
-type lineRange struct {
+type paragraph struct {
 	startX fixed.Int26_6
 	startY int
 	endX   fixed.Int26_6
 	endY   int
+	// runes is the number of runes represented by this paragraph.
+	runes int
+	// runeOff tracks the rune offset of the first rune of the paragraph in the document.
+	runeOff int
 }
 
-func (rng *lineRange) start(gl *text.Glyph) {
-	rng.startX = gl.X
-	rng.startY = int(gl.Y)
-}
+// Add add a visual line to the paragraph, returning a boolean value indicating
+// the end of a paragraph.
+func (p *paragraph) Add(l *line) bool {
+	lastGlyph := l.glyphs[len(l.glyphs)-1]
 
-func (rng *lineRange) end(gl *text.Glyph) {
-	rng.endX = gl.X
-	rng.endY = int(gl.Y)
-}
+	if p.runes == 0 {
+		start := l.glyphs[0]
+		p.startX = start.X
+		p.startY = int(start.Y)
 
-func newLineRange(start, end text.Glyph) lineRange {
-	return lineRange{startX: start.X, startY: int(start.Y), endX: end.X, endY: int(end.Y)}
+		p.endX = lastGlyph.X
+		p.endY = int(lastGlyph.Y)
+
+		p.runeOff = l.runeOff
+	} else {
+		p.endX = lastGlyph.X
+		p.endY = int(lastGlyph.Y)
+	}
+
+	p.runes += l.runes
+	return lastGlyph.Flags&text.FlagParagraphBreak != 0
 }
 
 type glyphIter struct {

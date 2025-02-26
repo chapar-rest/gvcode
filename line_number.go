@@ -12,7 +12,7 @@ import (
 	"gioui.org/text"
 )
 
-func paintLineNumber(gtx layout.Context, shaper *text.Shaper, params text.Parameters, viewport image.Rectangle, lines []lineRange, textMaterial op.CallOp) layout.Dimensions {
+func paintLineNumber(gtx layout.Context, shaper *text.Shaper, params text.Parameters, viewport image.Rectangle, paragraphs []paragraph, textMaterial op.CallOp) layout.Dimensions {
 	// inherit all other settings from the main text layout.
 	params.Alignment = text.End
 	params.MinWidth = gtx.Constraints.Min.X
@@ -24,7 +24,7 @@ func paintLineNumber(gtx layout.Context, shaper *text.Shaper, params text.Parame
 
 	quit := false
 lineLoop:
-	for i, line := range lines {
+	for i, line := range paragraphs {
 		if quit {
 			break
 		}

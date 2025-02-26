@@ -100,21 +100,21 @@ func (e *textView) PaintRegions(gtx layout.Context, regions []Region, material o
 // Only the start position is checked.
 func (e *textView) caretCurrentLine() (start combinedPos, end combinedPos) {
 	caretStart := e.closestToRune(e.caret.start)
-	if len(e.layouter.lineRanges) <= 0 {
+	if len(e.layouter.paragraphs) <= 0 {
 		return caretStart, caretStart
 	}
 
-	lineIdx := sort.Search(len(e.layouter.lineRanges), func(i int) bool {
-		rng := e.layouter.lineRanges[i]
+	lineIdx := sort.Search(len(e.layouter.paragraphs), func(i int) bool {
+		rng := e.layouter.paragraphs[i]
 		return rng.endY >= caretStart.y
 	})
 
 	// No exsiting lines found.
-	if lineIdx == len(e.layouter.lineRanges) {
+	if lineIdx == len(e.layouter.paragraphs) {
 		return caretStart, caretStart
 	}
 
-	line := e.layouter.lineRanges[lineIdx]
+	line := e.layouter.paragraphs[lineIdx]
 	start = e.closestToXY(line.startX, line.startY)
 	end = e.closestToXY(line.endX, line.endY)
 
@@ -149,7 +149,7 @@ func (e *textView) PaintLineNumber(gtx layout.Context, lt *text.Shaper, material
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
-	dims := paintLineNumber(gtx, lt, e.params, viewport, e.layouter.lineRanges, material)
+	dims := paintLineNumber(gtx, lt, e.params, viewport, e.layouter.paragraphs, material)
 	call := m.Stop()
 
 	rect := viewport.Sub(e.scrollOff)

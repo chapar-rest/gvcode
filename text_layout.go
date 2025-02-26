@@ -25,11 +25,11 @@ type textLayout struct {
 
 	// positions contain all possible caret positions, sorted by rune index.
 	positions []combinedPos
-	// screenLines contains metadata about the size and position of each line of
+	// lines contain metadata about the size and position of each line of
 	// text on the screen.
 	lines []*line
-	// lineRanges contain all line pixel coordinates in the document coordinates.
-	lineRanges []lineRange
+	// paragraphs contain size and position of each paragraph of text on the screen.
+	paragraphs []paragraph
 	// graphemes tracks the indices of grapheme cluster boundaries within text source.
 	graphemes []int
 	seg       segmenter.Segmenter
@@ -69,7 +69,7 @@ func (tl *textLayout) reset() {
 	tl.reader.Reset(tl.src)
 	tl.positions = tl.positions[:0]
 	tl.lines = tl.lines[:0]
-	tl.lineRanges = tl.lineRanges[:0]
+	tl.paragraphs = tl.paragraphs[:0]
 	tl.graphemes = tl.graphemes[:0]
 	tl.bounds = image.Rectangle{}
 }
@@ -239,30 +239,31 @@ func (tl *textLayout) updateBounds(line *line) {
 
 func (tl *textLayout) trackLines(lines []*line) {
 	if len(lines) <= 0 {
-		tl.lineRanges = append(tl.lineRanges, lineRange{})
+		tl.paragraphs = append(tl.paragraphs, paragraph{})
 		return
 	}
 
-	rng := lineRange{}
-	var lastGlyph *text.Glyph
+	rng := paragraph{}
 	for _, l := range lines {
-		if rng == (lineRange{}) {
-			rng.start(l.glyphs[0])
-			lastGlyph = l.glyphs[len(l.glyphs)-1]
-			rng.end(lastGlyph)
-		} else {
-			lastGlyph = l.glyphs[len(l.glyphs)-1]
-			rng.end(lastGlyph)
-		}
+		hasBreak := rng.Add(l)
 
-		if lastGlyph.Flags&text.FlagParagraphBreak != 0 {
-			tl.lineRanges = append(tl.lineRanges, rng)
-			rng = lineRange{}
+		// if rng == (paragraph{}) {
+		// 	rng.start(l.glyphs[0])
+		// 	lastGlyph = l.glyphs[len(l.glyphs)-1]
+		// 	rng.end(lastGlyph)
+		// } else {
+		// 	lastGlyph = l.glyphs[len(l.glyphs)-1]
+		// 	rng.end(lastGlyph)
+		// }
+
+		if hasBreak {
+			tl.paragraphs = append(tl.paragraphs, rng)
+			rng = paragraph{}
 		}
 	}
 
-	if rng != (lineRange{}) {
-		tl.lineRanges = append(tl.lineRanges, rng)
+	if rng != (paragraph{}) {
+		tl.paragraphs = append(tl.paragraphs, rng)
 	}
 }
 
