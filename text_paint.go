@@ -11,6 +11,8 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
+	lt "github.com/oligo/gvcode/internal/layout"
+
 )
 
 // calculateViewSize determines the size of the current visible content,
@@ -43,11 +45,11 @@ func (e *textView) PaintText(gtx layout.Context, material op.CallOp, textStyles 
 		styles:   textStyles,
 	}
 
-	for _, line := range e.layouter.lines {
-		if line.descent.Ceil()+line.yOff < viewport.Min.Y {
+	for _, line := range e.layouter.Lines {
+		if line.Descent.Ceil()+line.YOff < viewport.Min.Y {
 			continue
 		}
-		if line.yOff-line.ascent.Floor() > viewport.Max.Y {
+		if line.YOff-line.Ascent.Floor() > viewport.Max.Y {
 			break
 		}
 
@@ -67,7 +69,7 @@ func (e *textView) PaintSelection(gtx layout.Context, material op.CallOp) {
 	localViewport := image.Rectangle{Max: e.viewSize}
 	docViewport := image.Rectangle{Max: e.viewSize}.Add(e.scrollOff)
 	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
-	e.regions = e.layouter.locate(docViewport, e.caret.start, e.caret.end, e.regions)
+	e.regions = e.layouter.Locate(docViewport, e.caret.start, e.caret.end, e.regions)
 	//log.Println("regions count: ", len(e.regions), e.regions)
 	expandEmptyRegion := len(e.regions) > 1
 	for _, region := range e.regions {
@@ -98,25 +100,25 @@ func (e *textView) PaintRegions(gtx layout.Context, regions []Region, material o
 
 // caretCurrentLine returns the current paragraph that the carent is in.
 // Only the start position is checked.
-func (e *textView) caretCurrentLine() (start combinedPos, end combinedPos) {
+func (e *textView) caretCurrentLine() (start lt.CombinedPos, end lt.CombinedPos) {
 	caretStart := e.closestToRune(e.caret.start)
-	if len(e.layouter.paragraphs) <= 0 {
+	if len(e.layouter.Paragraphs) <= 0 {
 		return caretStart, caretStart
 	}
 
-	lineIdx := sort.Search(len(e.layouter.paragraphs), func(i int) bool {
-		rng := e.layouter.paragraphs[i]
-		return rng.endY >= caretStart.y
+	lineIdx := sort.Search(len(e.layouter.Paragraphs), func(i int) bool {
+		rng := e.layouter.Paragraphs[i]
+		return rng.EndY >= caretStart.Y
 	})
 
 	// No exsiting lines found.
-	if lineIdx == len(e.layouter.paragraphs) {
+	if lineIdx == len(e.layouter.Paragraphs) {
 		return caretStart, caretStart
 	}
 
-	line := e.layouter.paragraphs[lineIdx]
-	start = e.closestToXY(line.startX, line.startY)
-	end = e.closestToXY(line.endX, line.endY)
+	line := e.layouter.Paragraphs[lineIdx]
+	start = e.closestToXY(line.StartX, line.StartY)
+	end = e.closestToXY(line.EndX, line.EndY)
 
 	return
 }
@@ -129,12 +131,12 @@ func (e *textView) paintLineHighlight(gtx layout.Context, material op.CallOp) {
 	}
 
 	start, end := e.caretCurrentLine()
-	if start == (combinedPos{}) || end == (combinedPos{}) {
+	if start == (lt.CombinedPos{}) || end == (lt.CombinedPos{}) {
 		return
 	}
 
-	bounds := image.Rectangle{Min: image.Point{X: 0, Y: start.y - start.ascent.Ceil()},
-		Max: image.Point{X: gtx.Constraints.Max.X, Y: end.y + end.descent.Ceil()}}.Sub(e.scrollOff)
+	bounds := image.Rectangle{Min: image.Point{X: 0, Y: start.Y - start.Ascent.Ceil()},
+		Max: image.Point{X: gtx.Constraints.Max.X, Y: end.Y + end.Descent.Ceil()}}.Sub(e.scrollOff)
 
 	area := clip.Rect(e.adjustPadding(bounds)).Push(gtx.Ops)
 	material.Add(gtx.Ops)
@@ -149,7 +151,7 @@ func (e *textView) PaintLineNumber(gtx layout.Context, lt *text.Shaper, material
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
-	dims := paintLineNumber(gtx, lt, e.params, viewport, e.layouter.paragraphs, material)
+	dims := paintLineNumber(gtx, lt, e.params, viewport, e.layouter.Paragraphs, material)
 	call := m.Stop()
 
 	rect := viewport.Sub(e.scrollOff)
@@ -182,12 +184,12 @@ func (e *textView) PaintCaret(gtx layout.Context, material op.CallOp) {
 func (e *textView) CaretInfo() (pos image.Point, ascent, descent int) {
 	caretStart := e.closestToRune(e.caret.start)
 
-	ascent = caretStart.ascent.Ceil()
-	descent = caretStart.descent.Ceil()
+	ascent = caretStart.Ascent.Ceil()
+	descent = caretStart.Descent.Ceil()
 
 	pos = image.Point{
-		X: caretStart.x.Round(),
-		Y: caretStart.y,
+		X: caretStart.X.Round(),
+		Y: caretStart.Y,
 	}
 	pos = pos.Sub(e.scrollOff)
 	return

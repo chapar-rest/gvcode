@@ -16,7 +16,7 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/text"
 	"gioui.org/unit"
-	"github.com/oligo/gvcode/buffer"
+	"github.com/oligo/gvcode/internal/buffer"
 )
 
 // Editor implements an editable and scrollable text area.
@@ -596,6 +596,12 @@ func (e *Editor) ScrollByRatio(gtx layout.Context, ratio float32) {
 
 func (e *Editor) UpdateTextStyles(styles []*TextStyle) {
 	e.textStyles = styles
+}
+
+// SetDebug enable or disable the debug mode.
+// In debug mode, internal buffer state is printed.
+func SetDebug(enable bool) {
+	buffer.SetDebug(enable)
 }
 
 func abs(n int) int {

@@ -15,7 +15,6 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode"
-	"github.com/oligo/gvcode/buffer"
 	wg "github.com/oligo/gvcode/widget"
 )
 
@@ -112,7 +111,7 @@ func main() {
 	}
 	editorApp.window.Option(app.Title("Basic Example"))
 
-	buffer.SetDebug(false)
+	gvcode.SetDebug(false)
 	editorApp.state = &gvcode.Editor{
 		// Have to set it to true as horizontal scrolling does not work yet.
 		WrapLine: true,
