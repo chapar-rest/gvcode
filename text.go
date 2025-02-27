@@ -35,6 +35,8 @@ type TextStyle struct {
 	Background op.CallOp
 }
 
+// Region describes the position and baseline of an area of interest within
+// shaped text.
 type Region = lt.Region
 
 type caretPos struct {
@@ -54,6 +56,11 @@ type caretPos struct {
 // It provides methods for configuring a viewport onto the shaped text which can
 // be scrolled, and for configuring and drawing text selection boxes.
 type textView struct {
+	// Font set the font used to draw the text.
+	Font font.Font
+	// TextSize set the size of both the main text and line number.
+	TextSize unit.Sp
+	// Alignment controls the alignment of text within the editor.
 	Alignment text.Alignment
 	// LineHeight controls the distance between the baselines of lines of text.
 	// If zero, the font size will be used.
@@ -61,10 +68,23 @@ type textView struct {
 	// LineHeightScale applies a scaling factor to the LineHeight. If zero, a default
 	// value 1.2 will be used.
 	LineHeightScale float32
-	CaretWidth      unit.Dp
-	// TabWidth set how many spaces to represent a tab character .
+
+	// CaretWidth set the visual width of a caret.
+	CaretWidth unit.Dp
+
+	// SoftTab controls the behaviour when user try to insert a Tab character.
+	// If set to true, the editor will insert the amount of space characters specified by
+	// TabWidth, else the editor insert a \t character.
+	SoftTab bool
+
+	// TabWidth set how many spaces to represent a tab character. In the case of
+	// soft tab, this determines the number of space characters to insert into the editor.
+	// While for hard tab, this controls the maximum width of the 'tab' glyph to expand to.
 	TabWidth int
+
+	// WrapLine configures whether the displayed text will be broken into lines or not.
 	WrapLine bool
+
 	// WordSeperators configures a set of characters that will be used as word separators
 	// when doing word related operations, like navigating or deleting by word.
 	WordSeperators string
@@ -173,22 +193,18 @@ func (e *textView) MoveLines(distance int, selAct selectionAction) {
 }
 
 // Layout the text, reshaping it as necessary.
-func (e *textView) Layout(gtx layout.Context, lt *text.Shaper, font font.Font, size unit.Sp, wrapLine bool) {
+func (e *textView) Layout(gtx layout.Context, lt *text.Shaper) {
 	e.params.DisableSpaceTrim = true
 
 	if e.params.Locale != gtx.Locale {
 		e.params.Locale = gtx.Locale
 		e.invalidate()
 	}
-	textSize := fixed.I(gtx.Sp(size))
-	if e.params.Font != font || e.params.PxPerEm != textSize {
+	textSize := fixed.I(gtx.Sp(e.TextSize))
+	if e.params.Font != e.Font || e.params.PxPerEm != textSize {
 		e.invalidate()
-		e.params.Font = font
+		e.params.Font = e.Font
 		e.params.PxPerEm = textSize
-	}
-	if e.WrapLine != wrapLine {
-		e.WrapLine = wrapLine
-		e.invalidate()
 	}
 
 	maxWidth := gtx.Constraints.Max.X

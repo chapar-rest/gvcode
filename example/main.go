@@ -112,10 +112,10 @@ func main() {
 	editorApp.window.Option(app.Title("Basic Example"))
 
 	gvcode.SetDebug(false)
-	editorApp.state = &gvcode.Editor{
-		// Have to set it to true as horizontal scrolling does not work yet.
-		WrapLine: true,
-	}
+	editorApp.state = &gvcode.Editor{}
+	editorApp.state.WithOptions(
+		gvcode.WrapLine(true),
+	)
 
 	thisFile, _ := os.ReadFile("./main.go")
 	editorApp.state.SetText(string(thisFile))
