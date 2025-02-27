@@ -3,7 +3,6 @@ package gvcode
 import (
 	"image"
 	"math"
-	"sort"
 
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -12,7 +11,6 @@ import (
 	"gioui.org/text"
 	"gioui.org/unit"
 	lt "github.com/oligo/gvcode/internal/layout"
-
 )
 
 // calculateViewSize determines the size of the current visible content,
@@ -102,21 +100,11 @@ func (e *textView) PaintRegions(gtx layout.Context, regions []Region, material o
 // Only the start position is checked.
 func (e *textView) caretCurrentLine() (start lt.CombinedPos, end lt.CombinedPos) {
 	caretStart := e.closestToRune(e.caret.start)
-	if len(e.layouter.Paragraphs) <= 0 {
+	line := e.paragraphOfCaret(e.caret)
+	if line == (lt.Paragraph{}) {
 		return caretStart, caretStart
 	}
 
-	lineIdx := sort.Search(len(e.layouter.Paragraphs), func(i int) bool {
-		rng := e.layouter.Paragraphs[i]
-		return rng.EndY >= caretStart.Y
-	})
-
-	// No exsiting lines found.
-	if lineIdx == len(e.layouter.Paragraphs) {
-		return caretStart, caretStart
-	}
-
-	line := e.layouter.Paragraphs[lineIdx]
 	start = e.closestToXY(line.StartX, line.StartY)
 	end = e.closestToXY(line.EndX, line.EndY)
 

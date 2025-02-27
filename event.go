@@ -290,15 +290,10 @@ func (e *Editor) command(gtx layout.Context, k key.Event) (EditorEvent, bool) {
 			}
 		// Copy or Cut selection -- ignored if nothing selected.
 		case "C", "X":
-			e.scratch = e.text.SelectedText(e.scratch)
-			if text := string(e.scratch); text != "" {
-				gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(text))})
-				if k.Name == "X" && !e.readOnly {
-					if e.Delete(1) != 0 {
-						return ChangeEvent{}, true
-					}
-				}
+			if evt := e.onCopyCut(gtx, k); evt != nil {
+				return evt, true
 			}
+
 		// Select all
 		case "A":
 			e.text.SetCaret(0, e.text.Len())
@@ -434,4 +429,34 @@ func (e *Editor) updateSnippet(gtx layout.Context, start, end int) {
 	}
 	e.ime.snippet = newSnip
 	gtx.Execute(key.SnippetCmd{Tag: e, Snippet: newSnip})
+}
+
+func (e *Editor) onCopyCut(gtx layout.Context, k key.Event) EditorEvent {
+	lineOp := false
+	if e.text.SelectionLen() == 0 {
+		lineOp = true
+		e.scratch = e.text.SelectedLine(e.scratch)
+		if len(e.scratch) > 0 && e.scratch[len(e.scratch)-1] != '\n' {
+			e.scratch = append(e.scratch, '\n')
+		}
+	} else {
+		e.scratch = e.text.SelectedText(e.scratch)
+	}
+
+	if text := string(e.scratch); text != "" {
+		gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(text))})
+		if k.Name == "X" && !e.readOnly {
+			if !lineOp {
+				if e.Delete(1) != 0 {
+					return ChangeEvent{}
+				}
+			} else {
+				if e.DeleteLine() != 0 {
+					return ChangeEvent{}
+				}
+			}
+		}
+	}
+
+	return nil
 }

@@ -2,6 +2,7 @@ package gvcode
 
 import (
 	"image"
+	"strings"
 	"time"
 
 	"gioui.org/f32"
@@ -334,8 +335,44 @@ func (e *Editor) Delete(graphemeClusters int) (deletedRunes int) {
 	return end - start
 }
 
+// DeleteLine delete the current line, and place the caret at the
+// start of the next line.
+func (e *Editor) DeleteLine() (deletedRunes int) {
+	e.initBuffer()
+
+	start, end := e.text.CurrentLine()
+	if start == 0 && end == 0 {
+		return 0
+	}
+
+	e.replace(start, end, "")
+	// Reset xoff.
+	e.text.MoveCaret(0, 0)
+	e.SetCaret(start, start)
+
+	e.ClearSelection()
+	return end - start
+}
+
 func (e *Editor) Insert(s string) (insertedRunes int) {
 	e.initBuffer()
+
+	if s == "" {
+		return
+	}
+
+	singleLine := strings.Count(s, "\n") == 1 && s[len(s)-1] == '\n'
+	if singleLine && e.text.SelectionLen() == 0 {
+		// If s is a paragraph of text, insert s between the current line
+		// and the previous line.
+		start, end := e.text.CurrentLine()
+		moves := e.replace(start, start, s)
+		// Reset xoff.
+		e.text.MoveCaret(0, 0)
+		e.SetCaret(end, end)
+		e.scrollCaret = true
+		return moves
+	}
 
 	start, end := e.text.Selection()
 	moves := e.replace(start, end, s)
