@@ -340,8 +340,8 @@ func (e *Editor) Delete(graphemeClusters int) (deletedRunes int) {
 func (e *Editor) DeleteLine() (deletedRunes int) {
 	e.initBuffer()
 
-	start, end := e.text.CurrentLine()
-	if start == 0 && end == 0 {
+	start, end := e.text.SelectedLineRange()
+	if start == end {
 		return 0
 	}
 
@@ -361,11 +361,12 @@ func (e *Editor) Insert(s string) (insertedRunes int) {
 		return
 	}
 
+	// This single line mode is for copy/cut the current line(paragraph) when there is no selection.
 	singleLine := strings.Count(s, "\n") == 1 && s[len(s)-1] == '\n'
 	if singleLine && e.text.SelectionLen() == 0 {
 		// If s is a paragraph of text, insert s between the current line
 		// and the previous line.
-		start, end := e.text.CurrentLine()
+		start, end := e.text.SelectedLineRange()
 		moves := e.replace(start, start, s)
 		// Reset xoff.
 		e.text.MoveCaret(0, 0)
