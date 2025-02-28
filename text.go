@@ -366,9 +366,9 @@ func (e *textView) Replace(start, end int, s string) int {
 	e.src.Replace(startOff, endPos.Runes, s)
 	adjust := func(pos int) int {
 		switch {
-		case newEnd < pos && pos <= endPos.Runes:
+		case newEnd < pos && pos < endPos.Runes:
 			pos = newEnd
-		case endPos.Runes < pos:
+		case endPos.Runes <= pos:
 			diff := newEnd - endPos.Runes
 			pos = pos + diff
 		}
