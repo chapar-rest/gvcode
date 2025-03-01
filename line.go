@@ -9,6 +9,21 @@ import (
 	lt "github.com/oligo/gvcode/internal/layout"
 )
 
+// find a paragraph by rune index.
+func (e *textView) findParagraph(runeIdx int) lt.Paragraph {
+	idx := sort.Search(len(e.layouter.Paragraphs), func(i int) bool {
+		rng := e.layouter.Paragraphs[i]
+		return rng.RuneOff+rng.Runes > runeIdx
+	})
+
+	// No exsiting paragraph found.
+	if idx == len(e.layouter.Paragraphs) {
+		return lt.Paragraph{}
+	}
+
+	return e.layouter.Paragraphs[idx]
+}
+
 // selectedParagraphs returns the paragraphs that the carent selection covers.
 // If there's no selection, it returns the paragraph that the caret is in.
 func (e *textView) selectedParagraphs() []lt.Paragraph {

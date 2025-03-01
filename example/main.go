@@ -122,6 +122,7 @@ func main() {
 	// editorApp.state.SetHighlights([]editor.TextRange{{Start: 0, End: 5}})
 	styles := HightlightTextByPattern(editorApp.state.Text(), syntaxPattern)
 	editorApp.state.UpdateTextStyles(styles)
+	editorApp.state.WithOptions(gvcode.WithSoftTab(true))
 
 	go func() {
 		err := editorApp.run()
