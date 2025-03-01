@@ -361,9 +361,36 @@ func (e *Editor) Insert(s string) (insertedRunes int) {
 		return
 	}
 
-	// This single line mode is for paste operation after copying/cutting the current line(paragraph) when there is no selection.
-	singleLine := len(s) > 1 && strings.Count(s, "\n") == 1 && s[len(s)-1] == '\n'
-	if singleLine && e.text.SelectionLen() == 0 {
+	start, end := e.text.Selection()
+	moves := e.replace(start, end, s)
+	if end < start {
+		start = end
+	}
+	// Reset xoff.
+	e.text.MoveCaret(0, 0)
+	e.SetCaret(start+moves, start+moves)
+	e.scrollCaret = true
+	return moves
+}
+
+func isSingleLine(s string) bool {
+	return len(s) > 1 && strings.Count(s, "\n") == 1 && s[len(s)-1] == '\n'
+}
+
+// InsertLine insert a line of text before the current line, and place the caret at the
+// start of the current line.
+//
+// This single line insertion is mainly for paste operation after copying/cutting the
+// current line(paragraph) when there is no selection, but it can also used outside of
+// the editor to insert a entire line(paragraph).
+func (e *Editor) InsertLine(s string) (insertedRunes int) {
+	e.initBuffer()
+
+	if s == "" {
+		return
+	}
+
+	if isSingleLine(s) && e.text.SelectionLen() == 0 {
 		// If s is a paragraph of text, insert s between the current line
 		// and the previous line.
 		start, end := e.text.SelectedLineRange()
@@ -375,16 +402,7 @@ func (e *Editor) Insert(s string) (insertedRunes int) {
 		return moves
 	}
 
-	start, end := e.text.Selection()
-	moves := e.replace(start, end, s)
-	if end < start {
-		start = end
-	}
-	// Reset xoff.
-	e.text.MoveCaret(0, 0)
-	e.SetCaret(start+moves, start+moves)
-	e.scrollCaret = true
-	return moves
+	return
 }
 
 // undo revert the last operation(s).

@@ -254,7 +254,14 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 			e.scroller.Stop()
 			content, err := io.ReadAll(ke.Open())
 			if err == nil {
-				if e.Insert(string(content)) != 0 {
+				runes := 0
+				if isSingleLine(string(content)) {
+					runes = e.InsertLine(string(content))
+				} else {
+					runes = e.Insert(string(content))
+				}
+
+				if runes != 0 {
 					return ChangeEvent{}, true
 				}
 			}
