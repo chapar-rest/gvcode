@@ -361,8 +361,8 @@ func (e *Editor) Insert(s string) (insertedRunes int) {
 		return
 	}
 
-	// This single line mode is for copy/cut the current line(paragraph) when there is no selection.
-	singleLine := strings.Count(s, "\n") == 1 && s[len(s)-1] == '\n'
+	// This single line mode is for paste operation after copying/cutting the current line(paragraph) when there is no selection.
+	singleLine := len(s) > 1 && strings.Count(s, "\n") == 1 && s[len(s)-1] == '\n'
 	if singleLine && e.text.SelectionLen() == 0 {
 		// If s is a paragraph of text, insert s between the current line
 		// and the previous line.
