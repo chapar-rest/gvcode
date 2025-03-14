@@ -159,65 +159,92 @@ func TestUndoRedo(t *testing.T) {
 }
 
 func TestErase(t *testing.T) {
-	pt := NewPieceTable([]byte(""))
-	pt.Insert(0, "Hello")
-	pt.Insert(5, ",world")
-
-	// Erase start at the boundary of start piece, and end in the middle of the first piece.
-	pt.Erase(0, 3)
-	content := readTableContent(pt)
-	if content != "lo,world" {
-		t.Log("current pieces in piece table: ")
-		for p := pt.pieces.Head(); p != pt.pieces.tail; p = p.next {
-			t.Log(string(pt.getBuf(p.source).getTextByRange(p.byteOff, p.byteLength)))
+	cases := []struct {
+		desc  string
+		input []int
+		want  struct {
+			content string
+			bytes   int
 		}
-
-		t.Errorf("expected: lo,world, actual: %s", content)
+	}{
+		{
+			desc:  "Erase start at the boundary of start piece, and end in the middle of the first piece.",
+			input: []int{0, 3},
+			want: struct {
+				content string
+				bytes   int
+			}{content: "lo,world", bytes: 8},
+		},
+		{
+			desc:  "Erase start and end in the middle of a piece",
+			input: []int{6, 8},
+			want: struct {
+				content string
+				bytes   int
+			}{
+				content: "Hello,rld",
+				bytes:   9,
+			},
+		},
+		{
+			desc:  "Erase start and end in the middle of two pieces",
+			input: []int{4, 6},
+			want: struct {
+				content string
+				bytes   int
+			}{
+				content: "Hellworld",
+				bytes:   9,
+			},
+		},
+		{
+			desc:  "Erase start in the middle of a piece, and end in the boundary.",
+			input: []int{2, 5},
+			want: struct {
+				content string
+				bytes   int
+			}{
+				content: "He,world",
+				bytes:   8,
+			},
+		},
+		{
+			desc:  "Erase start and end in the boundary.",
+			input: []int{0, 5},
+			want: struct {
+				content string
+				bytes   int
+			}{
+				content: ",world",
+				bytes:   6,
+			},
+		},
+		{
+			desc:  "Erase all.",
+			input: []int{0, 11},
+			want: struct {
+				content string
+				bytes   int
+			}{
+				content: "",
+				bytes:   0,
+			},
+		},
 	}
 
-	pt.Undo()
-	content = readTableContent(pt)
-	if content != "Hello,world" {
-		t.Log(content)
-		t.Fail()
+	for _, tc := range cases {
+		pt := NewPieceTable([]byte(""))
+		pt.Insert(0, "Hello")
+		pt.Insert(5, ",world")
+
+		t.Run(tc.desc, func(t *testing.T) {
+			pt.Erase(tc.input[0], tc.input[1])
+			if ans := readTableContent(pt); ans != tc.want.content || pt.seqBytes != tc.want.bytes {
+				t.Errorf("got content: %s, want content: %s; got bytes: %d, want bytes: %d", ans, tc.want.content, pt.seqBytes, tc.want.bytes)
+			}
+		})
 	}
 
-	// Erase start and end in the middle of a piece
-	pt.Erase(6, 8)
-	content = readTableContent(pt)
-	if content != "Hello,rld" {
-		t.Log(content)
-		t.Fail()
-	}
-
-	pt.Undo()
-
-	// Erase start in the middle of a piece, and end in the boundary.
-	pt.Erase(2, 5)
-	content = readTableContent(pt)
-	if content != "He,world" {
-		t.Log(content)
-		t.Fail()
-	}
-
-	pt.Undo()
-
-	// Erase start and end in the boundary.
-	pt.Erase(0, 5)
-	content = readTableContent(pt)
-	if content != ",world" {
-		t.Log(content)
-		t.Fail()
-	}
-
-	pt.Undo()
-	// Erase start and end in the boundary.
-	pt.Erase(0, 11)
-	content = readTableContent(pt)
-	if content != "" {
-		t.Log(content)
-		t.Fail()
-	}
 }
 
 func TestGroupOp(t *testing.T) {
