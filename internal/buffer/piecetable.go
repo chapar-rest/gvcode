@@ -2,7 +2,6 @@ package buffer
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"unicode/utf8"
 )
@@ -291,12 +290,10 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) ([]C
 		rng.Restore()
 		// add the restored range onto the destination stack
 		dest.push(rng)
-		log.Println("before restore, sequence bytes and length: ", pt.seqBytes, pt.seqLength)
 
 		lastRuneLen, lastBytes := rng.Size()
 		pt.seqLength += newRuneLen - lastRuneLen
 		pt.seqBytes += newBytes - lastBytes
-		log.Println("after restore, sequence bytes and length: ", pt.seqBytes, pt.seqLength)
 		pt.changed = true
 		return rng.cursor
 	}
