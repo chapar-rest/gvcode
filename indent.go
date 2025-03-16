@@ -2,7 +2,6 @@ package gvcode
 
 import (
 	"bufio"
-	"bytes"
 	"io"
 	"slices"
 	"strings"
@@ -123,44 +122,57 @@ func (e autoIndenter) dedentLine(line string) string {
 	return line
 }
 
-// breakAndIndent insert a line break at the the current caret position, and if there is any indentation
-// of the previous line, it indent the new inserted line with the same size.
+// IndentOnBreak insert a line break at the the current caret position, and if there is any indentation
+// of the previous line, it indent the new inserted line with the same size. Furthermore, if the newline
+// if between a pair of brackets, it also insert indented lines between them.
 //
-// This is part of the line break handler when Enter or Return is pressed.
-func (e *autoIndenter) breakAndIndent(s string) (bool, int) {
+// This is mainly used as the line break handler when Enter or Return is pressed.
+func (e *autoIndenter) IndentOnBreak(s string) bool {
 	start, end := e.text.Selection()
 	if s != "\n" || start != end {
-		return e.Insert(s) > 0, 0
+		return e.Insert(s) > 0
 	}
 
 	// Find the previous paragraph.
 	p := e.text.SelectedLineText(e.scratch)
 	if len(p) == 0 {
-		return e.Insert(s) > 0, 0
+		return e.Insert(s) > 0
 	}
 
 	indentation := e.text.Indentation()
 	indents := 0
-	for {
-		if !bytes.HasPrefix(p, []byte(indentation)) {
+	spaces := 0
+	for _, r := range string(p) {
+		if r == '\t' {
+			indents++
+		} else if r == ' ' {
+			spaces++
+			if spaces == e.text.TabWidth {
+				indents++
+				spaces = 0
+				continue
+			}
+		} else {
+			// other chars
 			break
 		}
-
-		indents++
-		p = p[len(indentation):]
 	}
 
-	return e.Insert(s+strings.Repeat(indentation, indents)) > 0, indents
+	changed := e.Insert(s+strings.Repeat(indentation, indents)) > 0
+	if !changed {
+		return false
+	}
+	// Check if the caret is between a pair of brackets. If so we insert one more
+	// indented empty line between the pair of brackets.
+	return e.indentInsideBrackets(indents)
 }
 
-// indentInsideBrackets checks if the caret is between two adjascent brackets pairs and insert
+// indentInsideBrackets checks if the caret is between two adjacent brackets pairs and insert
 // indented lines between them.
-//
-// This is part of the line break handler when Enter or Return is pressed.
-func (e *autoIndenter) indentInsideBrackets(indents int) {
+func (e *autoIndenter) indentInsideBrackets(indents int) bool {
 	start, end := e.text.Selection()
 	if start <= 0 || start != end {
-		return
+		return false
 	}
 
 	indentation := e.text.Indentation()
@@ -170,7 +182,7 @@ func (e *autoIndenter) indentInsideBrackets(indents int) {
 	rightRune, err2 := e.buffer.ReadRuneAt(min(start, e.text.Len()))
 
 	if err1 != nil && err2 != nil {
-		return
+		return false
 	}
 
 	insideBrackets := string(rightRune) == ltrBracketPairs[string(leftRune)]
@@ -181,9 +193,11 @@ func (e *autoIndenter) indentInsideBrackets(indents int) {
 		changed := e.Insert(strings.Repeat(indentation, indents+1)+"\n") != 0
 		if changed {
 			e.text.MoveCaret(-1, -1)
+			return true
 		}
 	}
 
+	return false
 }
 
 // func (e *autoIndentHandler) dedentRightBrackets(ke key.EditEvent) bool {

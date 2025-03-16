@@ -524,15 +524,12 @@ func (e *Editor) onPasteEvent(ke transfer.DataEvent) EditorEvent {
 	return nil
 }
 
-func (e *Editor) onInsertLineBreak(key.Event) EditorEvent {
+func (e *Editor) onInsertLineBreak(ke key.Event) EditorEvent {
 	if e.readOnly {
 		return nil
 	}
 
-	changed, indents := e.indenter.breakAndIndent("\n")
-	e.indenter.indentInsideBrackets(indents)
-
-	if changed {
+	if e.indenter.IndentOnBreak("\n") {
 		return ChangeEvent{}
 	}
 

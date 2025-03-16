@@ -33,10 +33,11 @@ type Editor struct {
 	LineNumberMaterial op.CallOp
 	// Color used to highlight the text snippets, such as search matches.
 	TextHighlightMaterial op.CallOp
-	
+
 	// hooks
-	onPaste BeforePasteHook
+	onPaste  BeforePasteHook
 	onInsert BeforeInsertHook
+	indenter autoIndenter
 
 	// readOnly controls whether the contents of the editor can be altered by
 	// user interaction. If set to true, the editor will allow selecting text
@@ -120,6 +121,7 @@ func (e *Editor) initBuffer() {
 	}
 
 	e.text.CaretWidth = unit.Dp(1)
+	e.indenter.Editor = e
 }
 
 // Update the state of the editor in response to input events. Update consumes editor
