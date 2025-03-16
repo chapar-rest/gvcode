@@ -457,7 +457,8 @@ func (e *Editor) onTab(k key.Event) EditorEvent {
 		return nil
 	}
 
-	if e.SelectionLen() == 0 || e.text.PartialLineSelected() {
+	backward := k.Modifiers.Contain(key.ModShift)
+	if (!backward && e.SelectionLen() == 0) || e.text.PartialLineSelected() {
 		// expand soft tab.
 		start, end := e.text.Selection()
 		if e.Insert(e.text.ExpandTab(start, end, "\t")) != 0 {
@@ -465,14 +466,7 @@ func (e *Editor) onTab(k key.Event) EditorEvent {
 		}
 	}
 
-	backword := k.Modifiers.Contain(key.ModShift)
-
-	e.scratch = e.text.SelectedLineText(e.scratch)
-	if len(e.scratch) == 0 {
-		return nil
-	}
-
-	if e.adjustIndentation(e.scratch, backword) > 0 {
+	if e.indenter.IndentMultiLines(backward) > 0 {
 		// Reset xoff.
 		e.text.MoveCaret(0, 0)
 		e.scrollCaret = true
@@ -535,8 +529,8 @@ func (e *Editor) onInsertLineBreak(key.Event) EditorEvent {
 		return nil
 	}
 
-	changed, indents := e.breakAndIndent("\n")
-	e.indentInsideBrackets(indents)
+	changed, indents := e.indenter.breakAndIndent("\n")
+	e.indenter.indentInsideBrackets(indents)
 
 	if changed {
 		return ChangeEvent{}
