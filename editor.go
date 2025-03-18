@@ -295,6 +295,12 @@ func (e *Editor) Text() string {
 func (e *Editor) SetText(s string) {
 	e.initBuffer()
 
+	indent, _, size := GuessIndentation(s)
+	if indent == Spaces {
+		e.text.SoftTab = true
+	}
+	e.text.TabWidth = size
+
 	e.text.SetText(s)
 	e.ime.start = 0
 	e.ime.end = 0
@@ -628,6 +634,14 @@ func (e *Editor) UpdateTextStyles(styles []*TextStyle) {
 
 func (e *Editor) ReadOnly() bool {
 	return e.readOnly
+}
+
+func (e *Editor) TabStyle() (TabStyle, int) {
+	if e.text.SoftTab {
+		return Spaces, e.text.TabWidth
+	}
+
+	return Tabs, e.text.TabWidth
 }
 
 // SetDebug enable or disable the debug mode.
