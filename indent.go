@@ -185,7 +185,7 @@ func (e *autoIndenter) indentInsideBrackets(indents int) bool {
 		return false
 	}
 
-	insideBrackets := string(rightRune) == ltrBracketPairs[string(leftRune)]
+	insideBrackets := rightRune == e.text.BracketPairs[leftRune]
 	if insideBrackets {
 		// move to the left side of the line break.
 		e.text.MoveCaret(-moves, -moves)
@@ -206,32 +206,4 @@ func (e *autoIndenter) indentInsideBrackets(indents int) bool {
 // 		return false
 // 	}
 
-// }
 
-/*
-func (e *Editor) findMatchingBracket() (left int, right int) {
-	start, end := e.text.Selection()
-
-	leftRune, err := e.buffer.ReadRuneAt(max(0, start - 1))
-
-	if err == nil && (isBracket, isLeft := checkBracketPair(leftRune); isBracket) {
-
-	} else {
-		rightRune, err := e.buffer.ReadRuneAt(min(start, e.text.Len()))
-
-	}
-
-}
-
-func checkBracketPair(r rune) (_ bool, isLeft bool) {
-	if _, ok := ltrBracketPairs[string(r)]; ok {
-		return true, true
-	}
-
-	if _, ok := rtlBracketPairs[string(r)]; ok {
-		return true, false
-	}
-
-	return false, false
-}
-*/

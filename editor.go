@@ -220,6 +220,7 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 		e.paintSelection(gtx, e.SelectMaterial)
 		e.paintLineHighlight(gtx, e.LineMaterial)
 		e.paintTextRanges(gtx, e.TextHighlightMaterial)
+		e.text.highlightMatchingBrackets(gtx, e.SelectMaterial)
 		e.paintText(gtx, e.TextMaterial)
 	}
 	if gtx.Enabled() {
