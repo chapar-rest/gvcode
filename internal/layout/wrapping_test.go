@@ -33,9 +33,9 @@ func TestWrapParagraph(t *testing.T) {
 	testcases := []struct {
 		input string
 	}{
-		// {
-		// 	input: "alonglongword",
-		// },
+		{
+			input: "alonglongword",
+		},
 		{
 			input: "word\n",
 		},
