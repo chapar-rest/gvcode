@@ -158,7 +158,10 @@ func (e *autoIndenter) IndentOnBreak(s string) bool {
 		}
 	}
 
-	changed := e.Insert(s+strings.Repeat(indentation, indents)) > 0
+	if indents > 0 {
+		s = s + strings.Repeat(indentation, indents)
+	}
+	changed := e.Insert(s) > 0
 	if !changed {
 		return false
 	}
@@ -181,7 +184,7 @@ func (e *autoIndenter) indentInsideBrackets(indents int) bool {
 	leftRune, err1 := e.buffer.ReadRuneAt(start - 2 - moves) // offset to index
 	rightRune, err2 := e.buffer.ReadRuneAt(min(start, e.text.Len()))
 
-	if err1 != nil && err2 != nil {
+	if err1 != nil || err2 != nil {
 		return false
 	}
 
@@ -205,5 +208,3 @@ func (e *autoIndenter) indentInsideBrackets(indents int) bool {
 // 	if !ok {
 // 		return false
 // 	}
-
-
