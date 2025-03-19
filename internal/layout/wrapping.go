@@ -2,7 +2,6 @@ package layout
 
 import (
 	"iter"
-	"log"
 
 	"gioui.org/text"
 	"github.com/go-text/typesetting/segmenter"
@@ -218,14 +217,14 @@ func (w *lineWrapper) setup(nextGlyph func() (text.Glyph, bool), paragraph []run
 	w.glyphs = w.glyphs[:0]
 }
 
+// WrapParagraph wraps a paragraph of text using a policy similar to the WhenNecessary LineBreakPolicy from gotext/typesetting.
+// It is also the default policy used by Gio.
 func (w *lineWrapper) WrapParagraph(glyphsIter iter.Seq[text.Glyph], paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) []*Line {
 	nextGlyph, stop := iter.Pull(glyphsIter)
 	defer stop()
 	w.setup(nextGlyph, paragraph, maxWidth, tabWidth, spaceGlyph)
 
 	lines := make([]*Line, 0)
-
-	log.Println("++++++++++++++++++++ Wrapping paragraph: ", len(paragraph), string(paragraph))
 
 	for {
 		l := w.wrapNextLine(paragraph)
@@ -264,7 +263,6 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) Line {
 	}
 
 	if len(w.currentLine.Glyphs) > 0 {
-		log.Println("got line for word break", len(w.currentLine.Glyphs), len(paragraph), string(paragraph))
 		return w.currentLine
 	}
 
@@ -289,7 +287,6 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) Line {
 	}
 
 	if len(w.currentLine.Glyphs) > 0 {
-		log.Println("buffer unread size: ", w.glyphBuf.runes-w.glyphBuf.offset)
 		return w.currentLine
 	}
 
@@ -305,10 +302,8 @@ func (w *lineWrapper) wrapNextLine(paragraph []rune) Line {
 	}
 
 	if len(w.glyphs) > 0 {
-		w.currentLine.append(w.glyphBuf.buf...)
+		w.currentLine.append(w.glyphs...)
 	}
-
-	log.Println("left over glpyh line: ", len(w.currentLine.Glyphs))
 
 	return w.currentLine
 }
@@ -327,7 +322,7 @@ func (w *lineWrapper) readToNextBreak(breakAtIdx breakOption, paragraph []rune) 
 		advance := advanceOfGlyphs(w.glyphs)
 
 		if gl.Flags&text.FlagClusterBreak != 0 {
-			log.Println("rune: ", string(paragraph[w.glyphBuf.offset-1]), gl.Flags&text.FlagParagraphStart != 0)
+			//log.Println("rune: ", string(paragraph[w.glyphBuf.offset-1]), gl.Flags&text.FlagParagraphStart != 0)
 			isTab := paragraph[w.glyphBuf.offset-1] == '\t'
 			if isTab {
 				// the rune is a tab, expand it before line wrapping.
