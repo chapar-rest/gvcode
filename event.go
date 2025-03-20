@@ -199,6 +199,10 @@ func (e *Editor) processKey(gtx layout.Context) (EditorEvent, bool) {
 		key.Filter{Focus: e, Name: "V", Required: key.ModShortcut},
 		key.Filter{Focus: e, Name: "X", Required: key.ModShortcut},
 		key.Filter{Focus: e, Name: "A", Required: key.ModShortcut},
+		// Add search shortcut filter
+		key.Filter{Focus: e, Name: "F", Required: key.ModShortcut},
+		// Add escape key for closing search
+		key.Filter{Name: key.NameEscape},
 
 		key.Filter{Focus: e, Name: key.NameDeleteBackward, Optional: key.ModShortcutAlt | key.ModShift},
 		key.Filter{Focus: e, Name: key.NameDeleteForward, Optional: key.ModShortcutAlt | key.ModShift},
@@ -305,6 +309,25 @@ func (e *Editor) command(gtx layout.Context, k key.Event) (EditorEvent, bool) {
 			e.text.MoveTextStart(selAct)
 		case key.NameEnd:
 			e.text.MoveTextEnd(selAct)
+		case "F":
+			if e.SearchBar != nil {
+				e.SearchBar.ToggleVisibility()
+				if e.SearchBar.Visible {
+					// If there's a selection, use it as the search term
+					if e.SelectionLen() > 0 {
+						e.SearchBar.SearchEditor.SetText(e.SelectedText())
+						e.SearchBar.Search()
+					}
+					// Focus the search bar
+					// gtx.Execute(key.FocusCmd{Tag: e.SearchBar.SearchEditor})
+				}
+				return nil, false
+			}
+		case key.NameEscape:
+			if e.SearchBar != nil && e.SearchBar.Visible {
+				e.SearchBar.Close()
+				return nil, false
+			}
 		}
 		return nil, false
 	}

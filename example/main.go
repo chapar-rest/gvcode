@@ -14,6 +14,7 @@ import (
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
+
 	"github.com/oligo/gvcode"
 	wg "github.com/oligo/gvcode/widget"
 )
@@ -115,6 +116,7 @@ func main() {
 	editorApp.state = &gvcode.Editor{}
 	editorApp.state.WithOptions(
 		gvcode.WrapLine(true),
+		gvcode.WithSearchBar(th),
 	)
 
 	thisFile, _ := os.ReadFile("./main.go")

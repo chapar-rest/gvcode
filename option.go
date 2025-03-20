@@ -2,8 +2,10 @@ package gvcode
 
 import (
 	"gioui.org/font"
+	"gioui.org/op"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"gioui.org/widget/material"
 )
 
 // EditorOption defines a function to configure the editor.
@@ -107,6 +109,22 @@ func WrapLine(enabled bool) EditorOption {
 		if changed {
 			e.text.invalidate()
 		}
+	}
+}
+
+// WithSearchHighlightColor configures the color used to highlight search results
+func WithSearchHighlightColor(color op.CallOp) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.TextHighlightMaterial = color
+	}
+}
+
+// WithSearchBar attaches a search bar to the editor
+func WithSearchBar(theme *material.Theme) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.SearchBar = NewSearchBar(e, theme)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget/material"
+
 	"github.com/oligo/gvcode"
 )
 
@@ -38,6 +39,8 @@ type EditorStyle struct {
 	LineNumberGutter unit.Dp
 	LineNumberColor  color.NRGBA
 
+	SearchHighlightColor color.NRGBA
+
 	Editor *gvcode.Editor
 	shaper *text.Shaper
 }
@@ -49,14 +52,15 @@ func NewEditor(th *material.Theme, editor *gvcode.Editor) EditorStyle {
 		Font: font.Font{
 			Typeface: th.Face,
 		},
-		LineHeightScale:    1.2,
-		TabWidth:           4,
-		TextSize:           th.TextSize,
-		Color:              th.Fg,
-		SelectionColor:     mulAlpha(th.ContrastBg, 0x60),
-		LineHighlightColor: mulAlpha(th.ContrastBg, 0x30),
-		LineNumberColor:    mulAlpha(th.Fg, 0xb6),
-		LineNumberGutter:   unit.Dp(24),
+		LineHeightScale:      1.2,
+		TabWidth:             4,
+		TextSize:             th.TextSize,
+		Color:                th.Fg,
+		SelectionColor:       mulAlpha(th.ContrastBg, 0x60),
+		LineHighlightColor:   mulAlpha(th.ContrastBg, 0x30),
+		LineNumberColor:      mulAlpha(th.Fg, 0xb6),
+		LineNumberGutter:     unit.Dp(24),
+		SearchHighlightColor: mulAlpha(th.Fg, 0x60),
 	}
 
 	return es
@@ -84,10 +88,15 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	paint.ColorOp{Color: e.LineNumberColor}.Add(gtx.Ops)
 	lineNumColor := lineNumColorMacro.Stop()
 
+	// Add search highlight color
+	searchHighlightColorMacro := op.Record(gtx.Ops)
+	paint.ColorOp{Color: e.SearchHighlightColor}.Add(gtx.Ops)
+	searchHighlightColor := searchHighlightColorMacro.Stop()
 
 	e.Editor.WithOptions(
 		gvcode.WithShaperParams(e.Font, e.TextSize, text.Start, e.LineHeight, e.LineHeightScale),
 		gvcode.WithTabWidth(e.TabWidth),
+		gvcode.WithSearchHighlightColor(searchHighlightColor),
 	)
 
 	e.Editor.LineNumberGutter = e.LineNumberGutter

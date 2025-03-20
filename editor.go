@@ -16,6 +16,7 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/text"
 	"gioui.org/unit"
+
 	"github.com/oligo/gvcode/internal/buffer"
 )
 
@@ -33,6 +34,9 @@ type Editor struct {
 	LineNumberMaterial op.CallOp
 	// Color used to highlight the text snippets, such as search matches.
 	TextHighlightMaterial op.CallOp
+
+	// SearchBar handles search functionality
+	SearchBar *SearchBar
 
 	// hooks
 	onPaste  BeforePasteHook
@@ -172,25 +176,55 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
 	e.scroller.Add(gtx.Ops)
 
-	return layout.Flex{
-		Axis: layout.Horizontal,
-	}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return e.text.PaintLineNumber(gtx, lt, e.LineNumberMaterial)
-		}),
+	return layout.Stack{}.Layout(gtx,
+		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+			defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
+			e.scroller.Add(gtx.Ops)
 
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if e.LineNumberGutter <= 0 {
-				e.LineNumberGutter = unit.Dp(24)
+			return layout.Flex{
+				Axis: layout.Horizontal,
+			}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return e.text.PaintLineNumber(gtx, lt, e.LineNumberMaterial)
+				}),
+
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if e.LineNumberGutter <= 0 {
+						e.LineNumberGutter = unit.Dp(24)
+					}
+					return layout.Spacer{Width: e.LineNumberGutter}.Layout(gtx)
+				}),
+
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					e.text.Layout(gtx, lt)
+					return e.layout(gtx)
+				}),
+			)
+		}),
+		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+			if e.SearchBar != nil {
+				return e.SearchBar.Layout(gtx)
 			}
-			return layout.Spacer{Width: e.LineNumberGutter}.Layout(gtx)
-		}),
-
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			e.text.Layout(gtx, lt)
-			return e.layout(gtx)
+			return layout.Dimensions{}
 		}),
 	)
+	//
+	//return layout.Flex{
+	//	Axis: layout.Vertical,
+	//}.Layout(gtx,
+	//	// First, layout the search bar if visible
+	//	layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+	//		if e.SearchBar != nil {
+	//			return e.SearchBar.Layout(gtx)
+	//		}
+	//		return layout.Dimensions{}
+	//	}),
+	//
+	//	// Then, layout the editor
+	//	layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+	//
+	//	}),
+	//)
 
 }
 
