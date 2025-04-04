@@ -117,6 +117,7 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 func main() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 	th := material.NewTheme()
+	th.ContrastBg = color.NRGBA{R: 40, G: 204, B: 187, A: 255}
 
 	editorApp := EditorApp{
 		window: &app.Window{},

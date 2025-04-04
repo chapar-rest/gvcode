@@ -191,7 +191,9 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			e.text.Layout(gtx, lt)
 			dims := e.layout(gtx)
-			e.text.PaintOverlay(gtx, e.completor.Offset(), e.completor.Layout)
+			if e.completor != nil {
+				e.text.PaintOverlay(gtx, e.completor.Offset(), e.completor.Layout)
+			}
 			return dims
 		}),
 	)
