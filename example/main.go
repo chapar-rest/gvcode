@@ -1,12 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"log"
 	"os"
 	"regexp"
+	"strings"
 
 	"gioui.org/app"
+	"gioui.org/font"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/paint"
@@ -15,6 +18,7 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode"
+	"github.com/oligo/gvcode/addons/completion"
 	wg "github.com/oligo/gvcode/widget"
 )
 
@@ -24,9 +28,11 @@ type (
 )
 
 type EditorApp struct {
-	window *app.Window
-	th     *material.Theme
-	state  *gvcode.Editor
+	window     *app.Window
+	th         *material.Theme
+	state      *gvcode.Editor
+	completion gvcode.Completion
+	popup      completion.CompletionPopup
 }
 
 const (
@@ -89,6 +95,7 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					es := wg.NewEditor(th, ed.state)
 					es.Font.Typeface = "monospace"
+					es.Font.Weight = font.SemiBold
 					es.TextSize = unit.Sp(12)
 					es.LineHeightScale = 1.5
 					es.TextHighlightColor = color.NRGBA{R: 120, G: 120, B: 120, A: 200}
@@ -96,6 +103,12 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 					return es.Layout(gtx)
 				})
 			})
+		}),
+		layout.Rigid(func(gtx C) D {
+			line, col := ed.state.CaretPos()
+			lb := material.Label(th, th.TextSize*0.8, fmt.Sprintf("Line:%d, Col:%d", line+1, col+1))
+			lb.Alignment = text.End
+			return lb.Layout(gtx)
 		}),
 	)
 
@@ -117,12 +130,46 @@ func main() {
 		gvcode.WrapLine(true),
 	)
 
+	var quotePairs = map[rune]rune{
+		'\'': '\'',
+		'"':  '"',
+		'`':  '`',
+		'“':  '”',
+	}
+
+	// Bracket pairs
+	var bracketPairs = map[rune]rune{
+		'(': ')',
+		'{': '}',
+		'[': ']',
+		'<': '>',
+	}
+
 	thisFile, _ := os.ReadFile("./main.go")
 	editorApp.state.SetText(string(thisFile))
 	// editorApp.state.SetHighlights([]editor.TextRange{{Start: 0, End: 5}})
 	styles := HightlightTextByPattern(editorApp.state.Text(), syntaxPattern)
 	editorApp.state.UpdateTextStyles(styles)
-	editorApp.state.WithOptions(gvcode.WithSoftTab(true))
+
+	// Setting up auto-completion.
+	cm := &completion.DefaultCompletion{Editor: editorApp.state}
+	cm.SetTriggers(gvcode.AutoTrigger{})
+	cm.SetCompletors(&goCompletor{})
+	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandicate) layout.Dimensions {
+		editorApp.popup.Editor = editorApp.state
+		editorApp.popup.Completion = cm
+		editorApp.popup.TextSize = unit.Sp(12)
+		return editorApp.popup.Layout(gtx, th, items)
+	})
+
+	editorApp.completion = cm
+
+	editorApp.state.WithOptions(
+		gvcode.WithSoftTab(true),
+		gvcode.WithQuotePairs(quotePairs),
+		gvcode.WithBracketPairs(bracketPairs),
+		gvcode.WithAutoCompletion(editorApp.completion),
+	)
 
 	go func() {
 		err := editorApp.run()
@@ -162,4 +209,36 @@ func rgbaToOp(textColor color.NRGBA) op.CallOp {
 	m := op.Record(ops)
 	paint.ColorOp{Color: textColor}.Add(ops)
 	return m.Stop()
+}
+
+var golangKeywords = []string{
+	"break",
+	"default",
+	"func",
+	"interface",
+	"select",
+	"case",
+	"defer", "go", "map", "struct",
+	"chan", "else", "goto", "package", "switch",
+	"const", "fallthrough", "if", "range", "type",
+	"continue", "for", "import", "return", "var",
+}
+
+type goCompletor struct {
+}
+
+func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionCandicate {
+	candicates := make([]gvcode.CompletionCandicate, 0)
+	for _, kw := range golangKeywords {
+		if strings.Contains(kw, ctx.Input) {
+			candicates = append(candicates, gvcode.CompletionCandicate{
+				Label:       kw,
+				InsertText:  kw,
+				Description: kw,
+				Kind:        "text",
+			})
+		}
+	}
+
+	return candicates
 }
