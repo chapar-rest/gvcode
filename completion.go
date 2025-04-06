@@ -8,11 +8,13 @@ import (
 	"gioui.org/layout"
 )
 
-// Completion is the main auto-completion interface for the editor.
+// Completion is the main auto-completion interface for the editor. A Completion object
+// schedules flow between the editor, the visual popup widget and completion algorithms(the Completor).
 type Completion interface {
+	// Set in what conditions the completion should be activated.
 	SetTriggers(triggers ...Trigger)
-	// SetCompletors adds Completors to Completion. Completors should run indepently and return
-	// candicates to Completion. All candicates are them re-ranked and presented to the user.
+	// SetCompletors adds Completors to Completion. Completors should run independently and return
+	// candicates to Completion. All candicates are then re-ranked and presented to the user.
 	SetCompletors(completors ...Completor)
 
 	// SetPopup set the popup widget to be displayed when completion is activated.

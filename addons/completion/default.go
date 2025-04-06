@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"gioui.org/io/key"
 	"gioui.org/layout"
 	"github.com/oligo/gvcode"
 )
@@ -29,11 +30,33 @@ type session struct {
 func (dc *DefaultCompletion) SetTriggers(triggers ...gvcode.Trigger) {
 	dc.triggers = dc.triggers[:0]
 	dc.triggers = append(dc.triggers, triggers...)
+	if tr, exists := gvcode.GetCompletionTrigger[gvcode.KeyTrigger](dc.triggers); exists {
+		dc.Editor.RegisterCommand(dc,
+			key.Filter{Name: tr.Name, Required: tr.Modifiers},
+			func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
+				dc.onKey()
+				return nil
+			})
+	}
+
 }
 
 func (dc *DefaultCompletion) SetCompletors(completors ...gvcode.Completor) {
 	dc.completors = dc.completors[:0]
 	dc.completors = append(dc.completors, completors...)
+}
+
+func (dc *DefaultCompletion) onKey() {
+	ctx := dc.Editor.GetCompletionContext()
+	if dc.session == nil {
+		dc.session = &session{
+			ctx: &ctx,
+		}
+	} else {
+		dc.session.ctx = &ctx
+	}
+
+	dc.runCompletors(ctx)
 }
 
 func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
@@ -59,6 +82,10 @@ func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
 		return
 	}
 
+	dc.runCompletors(ctx)
+}
+
+func (dc *DefaultCompletion) runCompletors(ctx gvcode.CompletionContext) {
 	dc.candicates = dc.candicates[:0]
 	if len(dc.completors) == 0 {
 		return

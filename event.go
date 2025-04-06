@@ -380,6 +380,10 @@ func (e *Editor) updateCompletor(startNew bool) {
 		return
 	}
 
+	e.completor.OnText(e.currentCompletionCtx(startNew))
+}
+
+func (e *Editor) currentCompletionCtx(startNew bool) CompletionContext {
 	word, wordOff := e.text.ReadWord(true)
 	prefix := []rune(word)[:wordOff]
 	//log.Println("word, prefix and wordOff", word, string(prefix), wordOff)
@@ -395,7 +399,13 @@ func (e *Editor) updateCompletor(startNew bool) {
 	ctx.Position.Start = start - len(prefix)
 	ctx.Position.End = end
 	ctx.New = startNew
-	e.completor.OnText(ctx)
+	return ctx
+}
+
+// GetCompletionContext returns a context from the current caret position.
+// This is usually used in the condition of a key triggered completion.
+func (e *Editor) GetCompletionContext() CompletionContext {
+	return e.currentCompletionCtx(true)
 }
 
 func (e *Editor) onPasteEvent(ke transfer.DataEvent) EditorEvent {

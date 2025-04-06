@@ -10,6 +10,7 @@ import (
 
 	"gioui.org/app"
 	"gioui.org/font"
+	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/paint"
@@ -28,11 +29,10 @@ type (
 )
 
 type EditorApp struct {
-	window     *app.Window
-	th         *material.Theme
-	state      *gvcode.Editor
-	completion gvcode.Completion
-	popup      completion.CompletionPopup
+	window *app.Window
+	th     *material.Theme
+	state  *gvcode.Editor
+	popup  completion.CompletionPopup
 }
 
 const (
@@ -154,8 +154,13 @@ func main() {
 
 	// Setting up auto-completion.
 	cm := &completion.DefaultCompletion{Editor: editorApp.state}
-	cm.SetTriggers(gvcode.AutoTrigger{})
+	// set completion triggers
+	cm.SetTriggers(
+		gvcode.AutoTrigger{},
+		gvcode.KeyTrigger{Name: "P", Modifiers: key.ModShortcut})
+	// set the completion algorithms
 	cm.SetCompletors(&goCompletor{})
+	// set popup widget to let user navigate the candidates.
 	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandicate) layout.Dimensions {
 		editorApp.popup.Editor = editorApp.state
 		editorApp.popup.Completion = cm
@@ -163,13 +168,11 @@ func main() {
 		return editorApp.popup.Layout(gtx, th, items)
 	})
 
-	editorApp.completion = cm
-
 	editorApp.state.WithOptions(
 		gvcode.WithSoftTab(true),
 		gvcode.WithQuotePairs(quotePairs),
 		gvcode.WithBracketPairs(bracketPairs),
-		gvcode.WithAutoCompletion(editorApp.completion),
+		gvcode.WithAutoCompletion(cm),
 	)
 
 	go func() {
