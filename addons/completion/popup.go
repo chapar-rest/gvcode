@@ -17,19 +17,33 @@ import (
 	"github.com/oligo/gvcode"
 )
 
+// CompletionPopup is the builtin implementation of a completion popup.
 type CompletionPopup struct {
-	Editor     *gvcode.Editor
-	Completion gvcode.Completion
-	list       widget.List
-	TextSize   unit.Sp
-	focused    int
-	labels     []*itemLabel
+	editor  *gvcode.Editor
+	cmp     gvcode.Completion
+	list    widget.List
+	focused int
+	labels  []*itemLabel
+
+	// Size configures the max popup dimensions. If no value
+	// is provided, a reasonable value is set.
+	Size     image.Point
+	// TextSize configures the size the text displayed in the popup. If no value
+	// is provided, a reasonable value is set.
+	TextSize unit.Sp
+}
+
+func NewCompletionPopup(editor *gvcode.Editor, cmp gvcode.Completion) *CompletionPopup {
+	return &CompletionPopup{
+		editor: editor,
+		cmp:    cmp,
+	}
 }
 
 func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandicate) layout.Dimensions {
-	pop.update()
+	pop.update(gtx)
 
-	if !pop.Completion.IsActive() {
+	if !pop.cmp.IsActive() {
 		pop.reset()
 		return layout.Dimensions{}
 	}
@@ -41,10 +55,7 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items
 	}
 
 	return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Max = image.Point{
-			X: gtx.Dp(unit.Dp(400)),
-			Y: gtx.Dp(unit.Dp(200)),
-		}
+		gtx.Constraints.Max = pop.Size
 		gtx.Constraints.Min = image.Point{
 			X: gtx.Constraints.Max.X,
 			Y: 0,
@@ -54,7 +65,7 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items
 		dims := pop.layout(gtx, th, items)
 		callOp := macro.Stop()
 
-		defer clip.Rect{Max: dims.Size}.Push(gtx.Ops).Pop()
+		defer clip.UniformRRect(image.Rectangle{Max: dims.Size}, gtx.Dp(unit.Dp(2))).Push(gtx.Ops).Pop()
 		paint.Fill(gtx.Ops, th.Bg)
 		callOp.Add(gtx.Ops)
 		return dims
@@ -75,31 +86,37 @@ func (pop *CompletionPopup) updateSelection(direction int) {
 }
 
 func (pop *CompletionPopup) reset() {
-	pop.Completion.Cancel()
+	pop.cmp.Cancel()
 	pop.focused = 0
 	pop.labels = pop.labels[:0]
 	pop.list.ScrollTo(0)
-	pop.Editor.RemoveCommands(pop)
+	pop.editor.RemoveCommands(pop)
 }
 
-func (pop *CompletionPopup) update() {
+func (pop *CompletionPopup) update(gtx layout.Context) {
 	if pop.TextSize <= 0 {
 		pop.TextSize = unit.Sp(12)
 	}
+	if pop.Size == (image.Point{}) {
+		pop.Size = image.Point{
+			X: gtx.Dp(unit.Dp(400)),
+			Y: gtx.Dp(unit.Dp(200)),
+		}
+	}
 
-	pop.Editor.RegisterCommand(pop, key.Filter{Name: key.NameUpArrow, Optional: key.ModShift},
+	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameUpArrow, Optional: key.ModShift},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
 			pop.updateSelection(-1)
 			return nil
 		},
 	)
-	pop.Editor.RegisterCommand(pop, key.Filter{Name: key.NameDownArrow, Optional: key.ModShift},
+	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameDownArrow, Optional: key.ModShift},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
 			pop.updateSelection(1)
 			return nil
 		},
 	)
-	pop.Editor.RegisterCommand(pop, key.Filter{Name: key.NameEnter, Optional: key.ModShift},
+	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameEnter, Optional: key.ModShift},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
 			if pop.focused >= 0 {
 				// simulate a click
@@ -109,7 +126,7 @@ func (pop *CompletionPopup) update() {
 		},
 	)
 
-	pop.Editor.RegisterCommand(pop, key.Filter{Name: key.NameReturn, Optional: key.ModShift},
+	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameReturn, Optional: key.ModShift},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
 			if pop.focused >= 0 {
 				// simulate a click
@@ -119,7 +136,7 @@ func (pop *CompletionPopup) update() {
 		},
 	)
 
-	pop.Editor.RegisterCommand(pop, key.Filter{Name: key.NameEscape},
+	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameEscape},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
 			pop.reset()
 			return nil
@@ -143,7 +160,7 @@ func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items
 		c := items[index]
 		if len(pop.labels) <= index {
 			pop.labels = append(pop.labels, &itemLabel{onClicked: func() {
-				pop.Completion.OnConfirm(index)
+				pop.cmp.OnConfirm(index)
 				gtx.Execute(op.InvalidateCmd{})
 			}})
 		}
@@ -237,10 +254,10 @@ func (l *itemLabel) Layout(gtx layout.Context, th *material.Theme, w layout.Widg
 			}
 
 			var fill color.NRGBA
-			if l.hovering {
-				fill = adjustAlpha(th.Palette.ContrastBg, 0x30)
-			} else if l.selected {
+			if l.selected {
 				fill = adjustAlpha(th.Palette.ContrastBg, 0xb6)
+			} else if l.hovering {
+				fill = adjustAlpha(th.Palette.ContrastBg, 0x30)
 			}
 
 			rect := clip.Rect{

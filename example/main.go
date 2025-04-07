@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	"os"
@@ -161,10 +162,14 @@ func main() {
 	// set the completion algorithms
 	cm.SetCompletors(&goCompletor{})
 	// set popup widget to let user navigate the candidates.
+	editorApp.popup = *completion.NewCompletionPopup(editorApp.state, cm)
 	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandicate) layout.Dimensions {
-		editorApp.popup.Editor = editorApp.state
-		editorApp.popup.Completion = cm
 		editorApp.popup.TextSize = unit.Sp(12)
+		editorApp.popup.Size = image.Point{
+			X: gtx.Dp(unit.Dp(400)),
+			Y: gtx.Dp(unit.Dp(200)),
+		}
+
 		return editorApp.popup.Layout(gtx, th, items)
 	})
 
