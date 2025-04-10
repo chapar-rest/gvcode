@@ -16,7 +16,7 @@ type DefaultCompletion struct {
 	Editor     *gvcode.Editor
 	triggers   []gvcode.Trigger
 	completors []gvcode.Completor
-	candicates []gvcode.CompletionCandicate
+	candicates []gvcode.CompletionCandidate
 	session    *session
 	mu         sync.Mutex
 	popup      gvcode.CompletionPopup

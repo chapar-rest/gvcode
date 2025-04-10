@@ -144,7 +144,7 @@ The code from the example editor shows the usage:
 	cm.SetCompletors(&goCompletor{})
 	// set popup widget to let user navigate the candidates.
 	editorApp.popup = *completion.NewCompletionPopup(editorApp.state, cm)
-	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandicate) layout.Dimensions {
+	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandidate) layout.Dimensions {
 		editorApp.popup.TextSize = unit.Sp(12)
 		editorApp.popup.Size = image.Point{
 			X: gtx.Dp(unit.Dp(400)),

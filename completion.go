@@ -35,7 +35,7 @@ type Completion interface {
 	Layout(gtx layout.Context) layout.Dimensions
 }
 
-type CompletionPopup func(gtx layout.Context, items []CompletionCandicate) layout.Dimensions
+type CompletionPopup func(gtx layout.Context, items []CompletionCandidate) layout.Dimensions
 
 type CompletionContext struct {
 	// start new session if there is no active session.
@@ -57,7 +57,7 @@ type CompletionContext struct {
 	}
 }
 
-type CompletionCandicate struct {
+type CompletionCandidate struct {
 	Label       string
 	InsertText  string
 	Description string
@@ -65,7 +65,7 @@ type CompletionCandicate struct {
 }
 
 type Completor interface {
-	Suggest(ctx CompletionContext) []CompletionCandicate
+	Suggest(ctx CompletionContext) []CompletionCandidate
 }
 
 type Trigger interface {

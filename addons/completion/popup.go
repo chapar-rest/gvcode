@@ -27,7 +27,7 @@ type CompletionPopup struct {
 
 	// Size configures the max popup dimensions. If no value
 	// is provided, a reasonable value is set.
-	Size     image.Point
+	Size image.Point
 	// TextSize configures the size the text displayed in the popup. If no value
 	// is provided, a reasonable value is set.
 	TextSize unit.Sp
@@ -40,7 +40,7 @@ func NewCompletionPopup(editor *gvcode.Editor, cmp gvcode.Completion) *Completio
 	}
 }
 
-func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandicate) layout.Dimensions {
+func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandidate) layout.Dimensions {
 	pop.update(gtx)
 
 	if !pop.cmp.IsActive() {
@@ -149,7 +149,7 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 
 }
 
-func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandicate) layout.Dimensions {
+func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandidate) layout.Dimensions {
 	pop.list.Axis = layout.Vertical
 
 	li := material.List(th, &pop.list)
@@ -194,6 +194,7 @@ func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						lb := material.Label(th, pop.TextSize*0.75, c.Description)
 						lb.Color = adjustAlpha(th.Fg, 200)
+						lb.MaxLines = 1
 						return lb.Layout(gtx)
 					}),
 				)

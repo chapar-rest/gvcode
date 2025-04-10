@@ -163,7 +163,7 @@ func main() {
 	cm.SetCompletors(&goCompletor{})
 	// set popup widget to let user navigate the candidates.
 	editorApp.popup = *completion.NewCompletionPopup(editorApp.state, cm)
-	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandicate) layout.Dimensions {
+	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandidate) layout.Dimensions {
 		editorApp.popup.TextSize = unit.Sp(12)
 		editorApp.popup.Size = image.Point{
 			X: gtx.Dp(unit.Dp(400)),
@@ -236,11 +236,11 @@ var golangKeywords = []string{
 type goCompletor struct {
 }
 
-func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionCandicate {
-	candicates := make([]gvcode.CompletionCandicate, 0)
+func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
+	candicates := make([]gvcode.CompletionCandidate, 0)
 	for _, kw := range golangKeywords {
 		if strings.Contains(kw, ctx.Input) {
-			candicates = append(candicates, gvcode.CompletionCandicate{
+			candicates = append(candicates, gvcode.CompletionCandidate{
 				Label:       kw,
 				InsertText:  kw,
 				Description: kw,
