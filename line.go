@@ -10,6 +10,10 @@ import (
 // find a paragraph by rune index, returning the line number(starting from zero)
 // and the paragraph itself.
 func (e *textView) FindParagraph(runeIdx int) (int, lt.Paragraph) {
+	if len(e.layouter.Paragraphs) == 0 {
+		return 0, lt.Paragraph{}
+	}
+
 	idx := sort.Search(len(e.layouter.Paragraphs), func(i int) bool {
 		rng := e.layouter.Paragraphs[i]
 		return rng.RuneOff+rng.Runes > runeIdx
@@ -17,7 +21,7 @@ func (e *textView) FindParagraph(runeIdx int) (int, lt.Paragraph) {
 
 	// No exsiting paragraph found.
 	if idx == len(e.layouter.Paragraphs) {
-		return 0, lt.Paragraph{}
+		return idx - 1, e.layouter.Paragraphs[idx-1]
 	}
 
 	return idx, e.layouter.Paragraphs[idx]
