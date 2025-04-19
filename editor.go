@@ -36,7 +36,6 @@ type Editor struct {
 
 	// hooks
 	onPaste   BeforePasteHook
-	indenter  autoIndenter
 	completor Completion
 
 	// readOnly controls whether the contents of the editor can be altered by
@@ -123,7 +122,6 @@ func (e *Editor) initBuffer() {
 	}
 
 	e.text.CaretWidth = unit.Dp(1)
-	e.indenter.Editor = e
 }
 
 // Update the state of the editor in response to input events. Update consumes editor
@@ -302,9 +300,7 @@ func (e *Editor) SetText(s string) {
 	e.initBuffer()
 
 	indent, _, size := GuessIndentation(s)
-	if indent == Spaces {
-		e.text.SoftTab = true
-	}
+	e.text.SoftTab = indent == Spaces
 	e.text.TabWidth = size
 
 	e.text.SetText(s)

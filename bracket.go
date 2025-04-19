@@ -4,25 +4,20 @@ import (
 	"maps"
 )
 
-type bracketHandler struct {
-	*textView
-	idx bracketIdx
-}
-
 type bracket struct {
 	r   rune
 	pos int // rune offset.
 }
 
-type bracketIdx struct {
+type bracketStack struct {
 	idx []bracket
 }
 
-func (s *bracketIdx) push(item rune, pos int) {
+func (s *bracketStack) push(item rune, pos int) {
 	s.idx = append(s.idx, bracket{r: item, pos: pos})
 }
 
-func (s *bracketIdx) pop() (rune, int) {
+func (s *bracketStack) pop() (rune, int) {
 	if len(s.idx) == 0 {
 		return 0, 0
 	}
@@ -32,7 +27,7 @@ func (s *bracketIdx) pop() (rune, int) {
 	return last.r, last.pos
 }
 
-func (s *bracketIdx) peek() (rune, int) {
+func (s *bracketStack) peek() (rune, int) {
 	if len(s.idx) == 0 {
 		return 0, 0
 	}
@@ -41,29 +36,29 @@ func (s *bracketIdx) peek() (rune, int) {
 	return last.r, last.pos
 }
 
-func (s *bracketIdx) depth() int {
+func (s *bracketStack) depth() int {
 	return len(s.idx)
 }
 
-func (s *bracketIdx) reset() {
+func (s *bracketStack) reset() {
 	s.idx = s.idx[:0]
 }
 
-func (h *bracketHandler) rervesedBracketPairs() map[rune]rune {
+func rervesedBracketPairs(pairs map[rune]rune) map[rune]rune {
 	dest := make(map[rune]rune)
-	for k, v := range h.BracketPairs {
+	for k, v := range pairs {
 		dest[v] = k
 	}
 
 	return dest
 }
 
-func (h *bracketHandler) checkBracket(r rune) (_ bool, isLeft bool) {
-	if _, ok := h.BracketPairs[r]; ok {
+func checkBracket(pairs map[rune]rune, r rune) (_ bool, isLeft bool) {
+	if _, ok := pairs[r]; ok {
 		return true, true
 	}
 
-	if _, ok := h.rervesedBracketPairs()[r]; ok {
+	if _, ok := rervesedBracketPairs(pairs)[r]; ok {
 		return true, false
 	}
 
@@ -80,32 +75,34 @@ func mergeMaps(sources ...map[rune]rune) map[rune]rune {
 }
 
 // NearestMatchingBrackets finds the nearest matching brackets of the caret.
-func (e *bracketHandler) NearestMatchingBrackets() (left int, right int) {
+func (e *textView) NearestMatchingBrackets() (left int, right int) {
 	left, right = -1, -1
 	start, end := e.Selection()
 	if start != end {
 		return
 	}
-	e.idx.reset()
+
+	stack := &bracketStack{}
+	stack.reset()
 
 	start = min(start, e.Len())
 	nearest, err := e.src.ReadRuneAt(start)
-	isBracket, _ := e.checkBracket(nearest)
+	isBracket, _ := checkBracket(e.BracketPairs, nearest)
 	if err != nil || !isBracket {
 		start = max(0, start-1)
 		nearest, _ = e.src.ReadRuneAt(start)
 	}
 
-	if isBracket, isLeft := e.checkBracket(nearest); isBracket {
+	if isBracket, isLeft := checkBracket(e.BracketPairs, nearest); isBracket {
 		if isLeft {
 			left = start
 		} else {
 			right = start
 		}
-		e.idx.push(nearest, start)
+		stack.push(nearest, start)
 	}
 
-	rtlBrackets := e.rervesedBracketPairs()
+	rtlBrackets := rervesedBracketPairs(e.BracketPairs)
 	offset := start
 
 	// find the left half.
@@ -118,14 +115,14 @@ func (e *bracketHandler) NearestMatchingBrackets() (left int, right int) {
 			}
 
 			if br, ok := e.BracketPairs[next]; ok {
-				if r, _ := e.idx.peek(); r == br {
-					e.idx.pop()
-					if right >= 0 && e.idx.depth() == 0 {
+				if r, _ := stack.peek(); r == br {
+					stack.pop()
+					if right >= 0 && stack.depth() == 0 {
 						left = offset
 						break
 					}
 				} else {
-					e.idx.push(next, offset)
+					stack.push(next, offset)
 					left = offset
 					break
 				}
@@ -133,7 +130,7 @@ func (e *bracketHandler) NearestMatchingBrackets() (left int, right int) {
 
 			// found a right half bracket.
 			if _, ok := rtlBrackets[next]; ok {
-				e.idx.push(next, offset)
+				stack.push(next, offset)
 			}
 
 			if offset <= 0 {
@@ -153,14 +150,14 @@ func (e *bracketHandler) NearestMatchingBrackets() (left int, right int) {
 
 			// found left half bracket
 			if _, ok := e.BracketPairs[next]; ok {
-				e.idx.push(next, offset)
+				stack.push(next, offset)
 			}
 
 			// found a right half bracket.
 			if bl, ok := rtlBrackets[next]; ok {
-				if r, _ := e.idx.peek(); r == bl {
-					e.idx.pop()
-					if e.idx.depth() == 0 {
+				if r, _ := stack.peek(); r == bl {
+					stack.pop()
+					if stack.depth() == 0 {
 						right = offset
 						break
 					}

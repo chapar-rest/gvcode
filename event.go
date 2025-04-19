@@ -328,7 +328,13 @@ func (e *Editor) onTab(k key.Event) EditorEvent {
 		}
 	}
 
-	if e.indenter.IndentMultiLines(backward) > 0 {
+	e.scratch = e.text.SelectedLineText(e.scratch)
+	if len(e.scratch) == 0 {
+		return nil
+	}
+
+	start, end := e.text.SelectedLineRange()
+	if e.text.IndentMultiLines(e.scratch, start, end, backward) > 0 {
 		// Reset xoff.
 		e.text.MoveCaret(0, 0)
 		e.scrollCaret = true
@@ -444,7 +450,28 @@ func (e *Editor) onInsertLineBreak(ke key.Event) EditorEvent {
 		return nil
 	}
 
-	if e.indenter.IndentOnBreak("\n") {
+	changed := 0
+	start, end := e.text.Selection()
+	if start != end {
+		changed = e.replace(start, end, "\n")
+	} else {
+		// Find the previous paragraph.
+		p := e.text.SelectedLineText(e.scratch)
+		if len(p) == 0 {
+			changed = e.replace(start, end, "\n")
+		} else {
+			changed = e.text.IndentOnBreak(p, "\n")
+			if changed > 1 {
+				changed-- // move caret back to the indented line.
+			}
+		}
+	}
+
+	if changed > 0 {
+		// Reset xoff.
+		e.text.MoveCaret(0, 0)
+		e.SetCaret(start+changed, start+changed)
+		e.scrollCaret = true
 		return ChangeEvent{}
 	}
 
