@@ -280,10 +280,9 @@ func (tv *textView) calcLineHeight() fixed.Int26_6 {
 }
 
 // ByteOffset returns the start byte of the rune at the given
-// rune offset, clamped to the size of the text.
+// rune offset.
 func (e *textView) ByteOffset(runeOffset int) int64 {
-	pos := e.closestToRune(runeOffset)
-	return int64(e.src.RuneOffset(pos.Runes))
+	return int64(e.src.RuneOffset(runeOffset))
 }
 
 // Len is the length of the editor contents, in runes.
