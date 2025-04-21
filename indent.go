@@ -5,6 +5,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // IndentMultiLines indent or dedent each of the selected non-empty lines with
@@ -111,20 +112,15 @@ func (e *textView) dedentLine(line string) string {
 	return line
 }
 
-// IndentOnBreak insert a line break at the the current caret position, and if there is any indentation
-// of the previous line, it indent the new inserted line with the same size. Furthermore, if the newline
-// if between a pair of brackets, it also insert indented lines between them.
-//
-// This is mainly used as the line break handler when Enter or Return is pressed.
-func (e *textView) IndentOnBreak(prevLine []byte, s string) int {
+func checkIndentLevel(line []byte, tabWidth int) int {
 	indents := 0
 	spaces := 0
-	for _, r := range string(prevLine) {
+	for _, r := range string(line) {
 		if r == '\t' {
 			indents++
 		} else if r == ' ' {
 			spaces++
-			if spaces == e.TabWidth {
+			if spaces == tabWidth {
 				indents++
 				spaces = 0
 				continue
@@ -135,50 +131,48 @@ func (e *textView) IndentOnBreak(prevLine []byte, s string) int {
 		}
 	}
 
-	if indents > 0 {
-		s = s + strings.Repeat(e.Indentation(), indents)
-	}
-
-	start, end := e.Selection()
-	changed := e.Replace(start, end, s)
-	if changed <= 0 {
-		return changed
-	}
-	// Check if the caret is between a pair of brackets. If so we insert one more
-	// indented empty line between the pair of brackets.
-	changed += e.indentInsideBrackets(indents)
-	return changed
+	return indents
 }
 
-// indentInsideBrackets checks if the caret is between two adjacent brackets pairs and insert
-// indented lines between them.
-func (e *textView) indentInsideBrackets(indents int) int {
+// IndentOnBreak insert a line break at the the current caret position, and if there is any indentation
+// of the previous line, it indent the new inserted line with the same size. Furthermore, if the newline
+// if between a pair of brackets, it also insert indented lines between them.
+//
+// This is mainly used as the line break handler when Enter or Return is pressed.
+func (e *textView) IndentOnBreak(currentLine []byte, lineStart, lineEnd int, s string) int {
 	start, end := e.Selection()
-	if start <= 0 || start != end {
-		return 0
+	indents := checkIndentLevel(currentLine, e.TabWidth)
+	buf := &strings.Builder{}
+	adjust := 0
+
+	// 1. normal case:
+	buf.WriteString(s)
+	buf.WriteString(strings.Repeat(e.Indentation(), indents))
+
+	// 2. check if we are after inside a brackets pair.
+	leftBracket, rightBracket := e.NearestMatchingBrackets()
+	inBrackets := leftBracket >= 0 && rightBracket > leftBracket &&
+		lineStart <= leftBracket && leftBracket < lineEnd && end <= rightBracket
+	if inBrackets {
+		// Inside of a pair of brackets, add one more level of indents.
+		buf.WriteString(e.Indentation())
+
+		// 3 check if the right rune happens to be a right bracket
+		if rightBracket <= lineEnd && end == rightBracket {
+			s2 := s + strings.Repeat(e.Indentation(), indents)
+			buf.WriteString(s2)
+			adjust += utf8.RuneCountInString(s2)
+		}
+
 	}
 
-	indentation := e.Indentation()
-	moves := indents * len([]rune(indentation))
-
-	leftRune, err1 := e.src.ReadRuneAt(start - 2 - moves) // offset to index
-	rightRune, err2 := e.src.ReadRuneAt(min(start, e.Len()))
-
-	if err1 != nil || err2 != nil {
-		return 0
+	moves := e.Replace(start, end, buf.String())
+	if adjust > 0 {
+		e.MoveCaret(-adjust, -adjust)
 	}
 
-	insideBrackets := rightRune == e.BracketPairs[leftRune]
-	if insideBrackets {
-		// move to the left side of the line break.
-		e.MoveCaret(-moves, -moves)
-		// Add one more line and indent one more level.
-		return e.Replace(start, end, strings.Repeat(indentation, indents+1)+"\n")
-	}
-
-	return 0
+	return moves
 }
-
 
 // func (e *autoIndentHandler) dedentRightBrackets(ke key.EditEvent) bool {
 // 	opening, ok := rtlBracketPairs[ke.Text]

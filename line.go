@@ -87,12 +87,12 @@ func (e *textView) SelectedLineRange() (start, end int) {
 	return paragraphs[0].RuneOff, last.RuneOff + last.Runes
 }
 
-// SelectedLine returns the text of the selected lines. An empty selection is treated
+// SelectedLine returns the text of the selected lines and the rune range. An empty selection is treated
 // as a single line selection.
-func (e *textView) SelectedLineText(buf []byte) []byte {
+func (e *textView) SelectedLineText(buf []byte) ([]byte, int, int) {
 	paragraphs := e.selectedParagraphs()
 	if len(paragraphs) == 0 {
-		return buf[:0]
+		return buf[:0], 0, 0
 	}
 
 	start := paragraphs[0].RuneOff
@@ -106,7 +106,7 @@ func (e *textView) SelectedLineText(buf []byte) []byte {
 	}
 	buf = buf[:endOff-startOff]
 	n, _ := e.src.ReadAt(buf, int64(startOff))
-	return buf[:n]
+	return buf[:n], start, end
 }
 
 // partialLineSelected checks if the current selection is a partial single line.

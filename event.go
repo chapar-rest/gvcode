@@ -285,7 +285,7 @@ func (e *Editor) onCopyCut(gtx layout.Context, k key.Event) EditorEvent {
 	lineOp := false
 	if e.text.SelectionLen() == 0 {
 		lineOp = true
-		e.scratch = e.text.SelectedLineText(e.scratch)
+		e.scratch, _, _ = e.text.SelectedLineText(e.scratch)
 		if len(e.scratch) > 0 && e.scratch[len(e.scratch)-1] != '\n' {
 			e.scratch = append(e.scratch, '\n')
 		}
@@ -328,12 +328,12 @@ func (e *Editor) onTab(k key.Event) EditorEvent {
 		}
 	}
 
-	e.scratch = e.text.SelectedLineText(e.scratch)
+	var start, end int
+	e.scratch, start, end = e.text.SelectedLineText(e.scratch)
 	if len(e.scratch) == 0 {
 		return nil
 	}
 
-	start, end := e.text.SelectedLineRange()
 	if e.text.IndentMultiLines(e.scratch, start, end, backward) > 0 {
 		// Reset xoff.
 		e.text.MoveCaret(0, 0)
@@ -455,22 +455,19 @@ func (e *Editor) onInsertLineBreak(ke key.Event) EditorEvent {
 	if start != end {
 		changed = e.replace(start, end, "\n")
 	} else {
-		// Find the previous paragraph.
-		p := e.text.SelectedLineText(e.scratch)
-		if len(p) == 0 {
+		// Find the current paragraph.
+		var lineStart, lineEnd int
+		e.scratch, lineStart, lineEnd = e.text.SelectedLineText(e.scratch)
+		if len(e.scratch) == 0 {
 			changed = e.replace(start, end, "\n")
 		} else {
-			changed = e.text.IndentOnBreak(p, "\n")
-			if changed > 1 {
-				changed-- // move caret back to the indented line.
-			}
+			changed = e.text.IndentOnBreak(e.scratch, lineStart, lineEnd, "\n")
 		}
 	}
 
 	if changed > 0 {
 		// Reset xoff.
 		e.text.MoveCaret(0, 0)
-		e.SetCaret(start+changed, start+changed)
 		e.scrollCaret = true
 		return ChangeEvent{}
 	}
