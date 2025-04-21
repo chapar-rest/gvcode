@@ -30,6 +30,7 @@ func TestInsert(t *testing.T) {
 }
 
 func TestAppendInsert(t *testing.T) {
+	SetDebug(true)
 	pt := NewPieceTable([]byte{})
 	pt.Insert(0, "H")
 	pt.Insert(1, "e")
@@ -39,15 +40,18 @@ func TestAppendInsert(t *testing.T) {
 
 	expected := readTableContent(pt)
 	if expected != "Hello" {
+		t.Logf("expected: %s", expected)
 		t.Fail()
 	}
 
 	if pt.pieces.Length() != 1 {
+		t.Logf("expected length: %d, actual: %d", 1, pt.pieces.Length())
 		t.Fail()
 	}
 
 	pt.Insert(5, ", world")
 	if pt.pieces.Length() != 2 {
+		t.Logf("expected length: %d, actual: %d", 2, pt.pieces.Length())
 		t.Fail()
 	}
 

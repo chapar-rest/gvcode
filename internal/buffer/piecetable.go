@@ -129,7 +129,7 @@ func (pt *PieceTable) getBuf(source bufSrc) *textBuffer {
 }
 
 func (pt *PieceTable) recordAction(action action, runeIndex int) {
-	if pt.lastAction != action {
+	if pt.lastAction != 0 && pt.lastAction != action {
 		pt.lastInsertPiece = nil
 	}
 	pt.lastAction = action
