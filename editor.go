@@ -74,6 +74,8 @@ type Editor struct {
 	pending     []EditorEvent
 	// commands is a registry of key commands.
 	commands map[key.Name][]keyCommand
+	// autoInsertions tracks recently inserted closing brackets or quotes.
+	autoInsertions map[int]rune
 }
 
 type imeState struct {

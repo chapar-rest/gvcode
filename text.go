@@ -88,10 +88,8 @@ type textView struct {
 	// WordSeperators configures a set of characters that will be used as word separators
 	// when doing word related operations, like navigating or deleting by word.
 	WordSeperators string
-	// A set of quote pairs that can be auto-completed when the left  half is entered.
-	QuotePairs map[rune]rune
-	// A set of bracket pairs that can be auto-completed when the left half is entered.
-	BracketPairs map[rune]rune
+	// Brackets and quote pairs that can be auto-completed when the left half is entered.
+	BracketsQuotes *bracketsQuotes
 
 	src    buffer.TextSource
 	params text.Parameters
@@ -118,8 +116,7 @@ type textView struct {
 func (e *textView) SetSource(source buffer.TextSource) {
 	e.src = source
 	e.layouter = lt.NewTextLayout(e.src)
-	e.QuotePairs = builtinQuotePairs
-	e.BracketPairs = builtinBracketPairs
+	e.BracketsQuotes = &bracketsQuotes{}
 	e.invalidate()
 }
 

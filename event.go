@@ -345,36 +345,47 @@ func (e *Editor) onTab(k key.Event) EditorEvent {
 
 }
 
-func (e *Editor) autoCompleteBracketsAndQuotes(ke key.EditEvent) bool {
-	if ke.Text == "" {
-		return false
-	}
-
-	allPairs := mergeMaps(e.text.BracketPairs, e.text.QuotePairs)
-	closing, ok := allPairs[[]rune(ke.Text)[0]]
-	if !ok {
-		return false
-	}
-
-	e.scrollCaret = true
-	e.scroller.Stop()
-	e.replace(ke.Range.Start, ke.Range.End, ke.Text+string(closing))
-	e.text.MoveCaret(-1, -1)
-	return true
-}
-
 func (e *Editor) onTextInput(ke key.EditEvent) {
-	if e.readOnly {
+	if e.readOnly || len(ke.Text) <= 0 {
 		return
 	}
 
-	if e.autoCompleteBracketsAndQuotes(ke) {
-		return
+	if e.autoInsertions == nil {
+		e.autoInsertions = make(map[int]rune)
+	}
+
+	// check if the input character is a bracket or a quote.
+	r := []rune(ke.Text)[0]
+	counterpart, isOpening := e.text.BracketsQuotes.GetCounterpart(r)
+
+	if counterpart > 0 && isOpening {
+		// auto-insert the closing part.
+		e.replace(ke.Range.Start, ke.Range.End, ke.Text+string(counterpart))
+		e.text.MoveCaret(-1, -1)
+		start, _ := e.text.Selection()
+		e.autoInsertions[start] = counterpart
+
+	} else if counterpart > 0 {
+		// The input character is a bracket a quote, but it is a closing part.
+		//
+		// check if we can just move the cursor to the next position
+		// if the input is a just inserted closing part.
+		nextRune, err := e.text.ReadRuneAt(ke.Range.Start)
+
+		if err == nil && nextRune == e.autoInsertions[ke.Range.Start] {
+			e.text.MoveCaret(1, 1)
+			delete(e.autoInsertions, ke.Range.Start)
+		} else {
+			e.replace(ke.Range.Start, ke.Range.End, ke.Text)
+		}
+	} else {
+		delete(e.autoInsertions, ke.Range.Start)
+		e.replace(ke.Range.Start, ke.Range.End, ke.Text)
 	}
 
 	e.scrollCaret = true
 	e.scroller.Stop()
-	e.replace(ke.Range.Start, ke.Range.End, ke.Text)
+	// e.replace(ke.Range.Start, ke.Range.End, ke.Text)
 	// Reset caret xoff.
 	e.text.MoveCaret(0, 0)
 	// start to auto-complete, if there is a configured Completion.
