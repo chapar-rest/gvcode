@@ -463,7 +463,7 @@ func (e *Editor) onDeleteBackward() {
 	}
 
 	prev, err := e.text.ReadRuneAt(start - 1)
-	if err != nil {
+	if err != nil && err != io.EOF {
 		panic("Read rune panic: " + err.Error())
 	}
 
