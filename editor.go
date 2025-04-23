@@ -336,6 +336,11 @@ func (e *Editor) Delete(graphemeClusters int) (deletedRunes int) {
 		return 0
 	}
 
+	if graphemeClusters < 0 {
+		// update selection based on some rules.
+		e.onDeleteBackward()
+	}
+
 	start, end := e.text.Selection()
 	if start != end {
 		graphemeClusters -= sign(graphemeClusters)

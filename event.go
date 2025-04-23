@@ -453,3 +453,59 @@ func (e *Editor) onInsertLineBreak(ke key.Event) EditorEvent {
 	e.text.MoveCaret(0, 0)
 	return ChangeEvent{}
 }
+
+// onDeleteBackward update the selection when we are deleting the indentation, or
+// an auto inserted bracket/quote pair.
+func (e *Editor) onDeleteBackward() {
+	start, end := e.Selection()
+	if start != end {
+		return
+	}
+
+	prev, err := e.text.ReadRuneAt(start - 1)
+	if err != nil {
+		panic("Read rune panic: " + err.Error())
+	}
+
+	space := ' '
+	// When the leading of the line are spaces and tabs, delete up to the
+	// number of tab width spaces before the cursor.
+	if prev == space {
+		// Find the current paragraph.
+		var lineStart int
+		e.scratch, lineStart, _ = e.text.SelectedLineText(e.scratch)
+		leading := []rune(string(e.scratch))[:end-lineStart]
+		hasNonSpaceOrTab := strings.ContainsFunc(string(leading), func(r rune) bool {
+			return r != space && r != '\t'
+		})
+		if hasNonSpaceOrTab {
+			return
+		}
+
+		moves := 0
+		for i := len(leading) - 1; i >= 0; i-- {
+			if leading[i] == space && moves < e.text.TabWidth {
+				moves++
+			} else {
+				break
+			}
+		}
+		if moves > 0 {
+			e.text.MoveCaret(0, -moves)
+		}
+
+	} else {
+		// when there is rencently auto-inserted brackets or quotes,
+		// delete the auto inserted character and the previous character.
+		if inserted, exists := e.autoInsertions[start]; exists {
+			defer delete(e.autoInsertions, start)
+			counterpart, isOpening := e.text.BracketsQuotes.GetCounterpart(inserted)
+			if !isOpening && counterpart > 0 {
+				if prev == counterpart {
+					e.text.MoveCaret(-1, 1)
+				}
+			}
+		}
+	}
+
+}
