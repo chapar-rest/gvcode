@@ -174,7 +174,7 @@ func main() {
 	})
 
 	editorApp.state.WithOptions(
-		gvcode.WithSoftTab(true),
+		// gvcode.WithSoftTab(true),
 		gvcode.WithQuotePairs(quotePairs),
 		gvcode.WithBracketPairs(bracketPairs),
 		gvcode.WithAutoCompletion(cm),

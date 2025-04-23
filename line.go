@@ -144,7 +144,7 @@ func (e *textView) PartialLineSelected() bool {
 // If s is a single tab character and the editor is configured to use soft tab,
 // the tab is expanded with spaces, also tab stop is accounted when calculating
 // space number.
-func (e *textView) ExpandTab(start, end int, s string) string {
+func (e *textView) expandTab(start, end int, s string) string {
 	if !e.SoftTab || s != "\t" {
 		return s
 	}

@@ -319,22 +319,7 @@ func (e *Editor) onTab(k key.Event) EditorEvent {
 		return nil
 	}
 
-	backward := k.Modifiers.Contain(key.ModShift)
-	if (!backward && e.SelectionLen() == 0) || e.text.PartialLineSelected() {
-		// expand soft tab.
-		start, end := e.text.Selection()
-		if e.Insert(e.text.ExpandTab(start, end, "\t")) != 0 {
-			return ChangeEvent{}
-		}
-	}
-
-	var start, end int
-	e.scratch, start, end = e.text.SelectedLineText(e.scratch)
-	if len(e.scratch) == 0 {
-		return nil
-	}
-
-	if e.text.IndentMultiLines(e.scratch, start, end, backward) > 0 {
+	if e.text.IndentLines(k.Modifiers.Contain(key.ModShift)) > 0 {
 		// Reset xoff.
 		e.text.MoveCaret(0, 0)
 		e.scrollCaret = true

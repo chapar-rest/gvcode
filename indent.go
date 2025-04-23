@@ -8,11 +8,30 @@ import (
 	"unicode/utf8"
 )
 
-// IndentMultiLines indent or dedent each of the selected non-empty lines with
-// one tab(soft tab or hard tab). If there is now selection, the current line is
+// IndentLines indent or dedent each of the selected non-empty lines with
+// one tab(soft tab or hard tab). If there is no selection, the current line is
 // indented or dedented.
-func (e *textView) IndentMultiLines(lines []byte, linesStart, linesEnd int, dedent bool) int {
-	lineReader := bufio.NewReader(strings.NewReader(string(lines)))
+func (e *textView) IndentLines(dedent bool) int {
+	// 1. normal case: insert a TAB forward.
+	if selectedLines := e.selectedParagraphs(); !dedent && len(selectedLines) <= 1 {
+		// expand soft tab.
+		start, end := e.Selection()
+		moves := e.Replace(start, end, e.expandTab(start, end, "\t"))
+		if start != end {
+			e.ClearSelection()
+			e.MoveCaret(moves, moves)
+		}
+		return moves
+	}
+
+	// 2. Otherwise, indent or dedent all the selected lines.
+	var linesStart, linesEnd int
+	e.lineBuf, linesStart, linesEnd = e.SelectedLineText(e.lineBuf)
+	if len(e.lineBuf) == 0 {
+		return 0
+	}
+
+	lineReader := bufio.NewReader(strings.NewReader(string(e.lineBuf)))
 	newLines := strings.Builder{}
 	moves := 0
 	caretMoves := 0
@@ -50,7 +69,10 @@ func (e *textView) IndentMultiLines(lines []byte, linesStart, linesEnd int, dede
 		}
 	}
 
-	n := e.Replace(linesStart, linesEnd, newLines.String())
+	var inserted int
+	if newLines.String() != string(e.lineBuf) {
+		inserted = e.Replace(linesStart, linesEnd, newLines.String())
+	}
 
 	if moves != 0 {
 		// adjust caret positions
@@ -71,7 +93,7 @@ func (e *textView) IndentMultiLines(lines []byte, linesStart, linesEnd int, dede
 		}
 	}
 
-	return n
+	return inserted
 }
 
 func (e *textView) dedentLine(line string) string {
