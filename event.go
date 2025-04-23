@@ -461,27 +461,10 @@ func (e *Editor) onInsertLineBreak(ke key.Event) EditorEvent {
 		return nil
 	}
 
-	changed := 0
-	start, end := e.text.Selection()
-	if start != end {
-		changed = e.replace(start, end, "\n")
-	} else {
-		// Find the current paragraph.
-		var lineStart, lineEnd int
-		e.scratch, lineStart, lineEnd = e.text.SelectedLineText(e.scratch)
-		if len(e.scratch) == 0 {
-			changed = e.replace(start, end, "\n")
-		} else {
-			changed = e.text.IndentOnBreak(e.scratch, lineStart, lineEnd, "\n")
-		}
-	}
-
-	if changed > 0 {
-		// Reset xoff.
-		e.text.MoveCaret(0, 0)
-		e.scrollCaret = true
-		return ChangeEvent{}
-	}
-
-	return nil
+	e.text.IndentOnBreak("\n")
+	// Reset xoff.
+	e.scrollCaret = true
+	e.scroller.Stop()
+	e.text.MoveCaret(0, 0)
+	return ChangeEvent{}
 }

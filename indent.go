@@ -139,9 +139,12 @@ func checkIndentLevel(line []byte, tabWidth int) int {
 // if between a pair of brackets, it also insert indented lines between them.
 //
 // This is mainly used as the line break handler when Enter or Return is pressed.
-func (e *textView) IndentOnBreak(currentLine []byte, lineStart, lineEnd int, s string) int {
+func (e *textView) IndentOnBreak(s string) int {
+	var lineStart, lineEnd int
+	e.lineBuf, lineStart, lineEnd = e.SelectedLineText(e.lineBuf)
+
 	start, end := e.Selection()
-	indents := checkIndentLevel(currentLine, e.TabWidth)
+	indents := checkIndentLevel(e.lineBuf, e.TabWidth)
 	buf := &strings.Builder{}
 	adjust := 0
 
@@ -167,9 +170,15 @@ func (e *textView) IndentOnBreak(currentLine []byte, lineStart, lineEnd int, s s
 	}
 
 	moves := e.Replace(start, end, buf.String())
-	if adjust > 0 {
-		e.MoveCaret(-adjust, -adjust)
+	if start != end {
+		// if there is a seletion, clear the selection.
+		e.ClearSelection()
+		adjust -= moves
 	}
+
+	// get the updated selection.
+	start, end = e.Selection()
+	e.SetCaret(start-adjust, end-adjust)
 
 	return moves
 }

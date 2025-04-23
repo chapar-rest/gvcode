@@ -109,14 +109,18 @@ func TestIndentOnBreak(t *testing.T) {
 			want:       "abc{\n\t\n}",
 			wantMoves:  3,
 		},
+		{
+			input:      "\tabc{\n\n}",
+			initialPos: 6,
+			want:       "\tabc{\n\n\n}",
+			wantMoves:  1,
+		},
 	}
 
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("%d: %s", i, tc.input), func(t *testing.T) {
 			text := setup(tc.input, tc.initialPos)
-			line, lineStart, lineEnd := text.SelectedLineText(nil)
-			t.Logf("line: %q, start: %d, end: %d", line, lineStart, lineEnd)
-			actual := text.IndentOnBreak(line, lineStart, lineEnd, "\n")
+			actual := text.IndentOnBreak("\n")
 			finalContent := text.src.Text(nil)
 			if actual != tc.wantMoves || string(finalContent) != tc.want {
 				t.Logf("want content: %q, actual content: %q, want moves: %d, actual moves: %d", tc.want, string(finalContent), tc.wantMoves, actual)

@@ -109,6 +109,8 @@ type textView struct {
 	// caret position in the view.
 	caret   caretPos
 	regions []Region
+	// line buffer for line related operations.
+	lineBuf []byte
 }
 
 // SetSource initializes the underlying data source for the Text. This
