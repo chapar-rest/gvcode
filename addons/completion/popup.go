@@ -19,11 +19,12 @@ import (
 
 // CompletionPopup is the builtin implementation of a completion popup.
 type CompletionPopup struct {
-	editor  *gvcode.Editor
-	cmp     gvcode.Completion
-	list    widget.List
-	focused int
-	labels  []*itemLabel
+	editor     *gvcode.Editor
+	cmp        gvcode.Completion
+	list       widget.List
+	itemsCount int
+	focused    int
+	labels     []*itemLabel
 
 	// Size configures the max popup dimensions. If no value
 	// is provided, a reasonable value is set.
@@ -41,6 +42,7 @@ func NewCompletionPopup(editor *gvcode.Editor, cmp gvcode.Completion) *Completio
 }
 
 func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandidate) layout.Dimensions {
+	pop.itemsCount = len(items)
 	pop.update(gtx)
 
 	if !pop.cmp.IsActive() {
@@ -51,7 +53,7 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items
 	border := widget.Border{
 		Color:        adjustAlpha(th.Fg, 0xb0),
 		Width:        unit.Dp(1),
-		CornerRadius: unit.Dp(2),
+		CornerRadius: unit.Dp(4),
 	}
 
 	return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -62,10 +64,13 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items
 		}
 
 		macro := op.Record(gtx.Ops)
-		dims := pop.layout(gtx, th, items)
+		dims := layout.UniformInset(unit.Dp(4)).Layout(gtx,
+			func(gtx layout.Context) layout.Dimensions {
+				return pop.layout(gtx, th, items)
+			})
 		callOp := macro.Stop()
 
-		defer clip.UniformRRect(image.Rectangle{Max: dims.Size}, gtx.Dp(unit.Dp(2))).Push(gtx.Ops).Pop()
+		defer clip.UniformRRect(image.Rectangle{Max: dims.Size}, gtx.Dp(unit.Dp(4))).Push(gtx.Ops).Pop()
 		paint.Fill(gtx.Ops, th.Bg)
 		callOp.Add(gtx.Ops)
 		return dims
@@ -73,16 +78,24 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items
 }
 
 func (pop *CompletionPopup) updateSelection(direction int) {
-	pop.list.ScrollBy(float32(direction))
-
 	pop.labels[pop.focused].selected = false
 	if direction < 0 {
 		pop.focused = max(pop.focused+direction, 0)
 	} else {
-		pop.focused = min(pop.focused+direction, len(pop.labels)-1)
+		pop.focused = min(pop.focused+direction, pop.itemsCount-1)
 	}
 
 	pop.labels[pop.focused].selected = true
+	if direction > 0 {
+		scrolled := pop.list.Position.First + pop.list.Position.Count
+		if scrolled <= pop.focused && scrolled+direction <= len(pop.labels) {
+			pop.list.ScrollBy(float32(direction))
+		}
+	} else {
+		if pop.list.Position.First > pop.focused {
+			pop.list.ScrollBy(float32(direction))
+		}
+	}
 }
 
 func (pop *CompletionPopup) reset() {
@@ -136,6 +149,18 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 		},
 	)
 
+	// press Tab to confirm
+	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameTab, Optional: key.ModShift},
+		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
+			if pop.focused >= 0 {
+				// simulate a click
+				pop.labels[pop.focused].Click()
+			}
+			return nil
+		},
+	)
+
+	// press ESC to cancel and close the popup
 	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameEscape},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
 			pop.reset()
@@ -147,6 +172,17 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 		pop.labels[pop.focused].selected = true
 	}
 
+	if len(pop.labels) < pop.itemsCount {
+		for i := len(pop.labels); i < pop.itemsCount; i++ {
+			pop.labels = append(pop.labels, &itemLabel{onClicked: func() {
+				pop.cmp.OnConfirm(i)
+				gtx.Execute(op.InvalidateCmd{})
+			}})
+		}
+	} else {
+		pop.labels = pop.labels[:pop.itemsCount]
+	}
+
 }
 
 func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandidate) layout.Dimensions {
@@ -156,21 +192,17 @@ func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items
 	li.AnchorStrategy = material.Overlay
 	li.ScrollbarStyle.Indicator.HoverColor = adjustAlpha(th.ContrastBg, 0xb0)
 	li.ScrollbarStyle.Indicator.Color = adjustAlpha(th.ContrastBg, 0x30)
+	li.ScrollbarStyle.Indicator.MinorWidth = unit.Dp(8)
+
 	return li.Layout(gtx, len(items), func(gtx layout.Context, index int) layout.Dimensions {
 		c := items[index]
-		if len(pop.labels) <= index {
-			pop.labels = append(pop.labels, &itemLabel{onClicked: func() {
-				pop.cmp.OnConfirm(index)
-				gtx.Execute(op.InvalidateCmd{})
-			}})
-		}
 
 		return pop.labels[index].Layout(gtx, th, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{
 				Top:    unit.Dp(2),
 				Bottom: unit.Dp(2),
 				Left:   unit.Dp(6),
-				Right:  unit.Dp(6),
+				Right:  unit.Dp(8),
 			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{
 					Axis:      layout.Horizontal,
