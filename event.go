@@ -370,27 +370,31 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 
 	e.scrollCaret = true
 	e.scroller.Stop()
-	// e.replace(ke.Range.Start, ke.Range.End, ke.Text)
 	// Reset caret xoff.
 	e.text.MoveCaret(0, 0)
 	// start to auto-complete, if there is a configured Completion.
-	e.updateCompletor(true)
+	e.updateCompletor(false)
 }
 
-func (e *Editor) updateCompletor(startNew bool) {
+func (e *Editor) updateCompletor(cancel bool) {
 	if e.completor == nil {
 		return
 	}
 
-	e.completor.OnText(e.currentCompletionCtx(startNew))
+	if cancel {
+		e.completor.Cancel()
+		return
+	}
+
+	e.completor.OnText(e.currentCompletionCtx())
 }
 
-func (e *Editor) currentCompletionCtx(startNew bool) CompletionContext {
-	word, wordOff := e.text.ReadWord(true)
+func (e *Editor) currentCompletionCtx() CompletionContext {
+	word, wordOff := e.text.ReadWord(false)
 	prefix := []rune(word)[:wordOff]
 	//log.Println("word, prefix and wordOff", word, string(prefix), wordOff)
 	ctx := CompletionContext{
-		Input: string(prefix),
+		Prefix: string(prefix),
 	}
 	ctx.Position.Line, ctx.Position.Column = e.text.CaretPos()
 	// scroll off will change after we update the position, so we use doc view position instead
@@ -400,14 +404,13 @@ func (e *Editor) currentCompletionCtx(startNew bool) CompletionContext {
 	start, end := e.text.Selection()
 	ctx.Position.Start = start - len(prefix)
 	ctx.Position.End = end
-	ctx.New = startNew
 	return ctx
 }
 
 // GetCompletionContext returns a context from the current caret position.
 // This is usually used in the condition of a key triggered completion.
 func (e *Editor) GetCompletionContext() CompletionContext {
-	return e.currentCompletionCtx(true)
+	return e.currentCompletionCtx()
 }
 
 func (e *Editor) onPasteEvent(ke transfer.DataEvent) EditorEvent {

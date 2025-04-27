@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image"
 	"image/color"
 	"log"
 	"os"
@@ -33,7 +32,6 @@ type EditorApp struct {
 	window *app.Window
 	th     *material.Theme
 	state  *gvcode.Editor
-	popup  completion.CompletionPopup
 }
 
 const (
@@ -155,22 +153,20 @@ func main() {
 
 	// Setting up auto-completion.
 	cm := &completion.DefaultCompletion{Editor: editorApp.state}
-	// set completion triggers
-	cm.SetTriggers(
-		gvcode.AutoTrigger{},
-		gvcode.KeyTrigger{Name: "P", Modifiers: key.ModShortcut})
-	// set the completion algorithms
-	cm.SetCompletors(&goCompletor{})
-	// set popup widget to let user navigate the candidates.
-	editorApp.popup = *completion.NewCompletionPopup(editorApp.state, cm)
-	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandidate) layout.Dimensions {
-		editorApp.popup.TextSize = unit.Sp(12)
-		editorApp.popup.Size = image.Point{
-			X: gtx.Dp(unit.Dp(400)),
-			Y: gtx.Dp(unit.Dp(200)),
-		}
 
-		return editorApp.popup.Layout(gtx, th, items)
+	// set popup widget to let user navigate the candidates.
+	popup := completion.NewCompletionPopup(editorApp.state, cm)
+	popup.Theme = th
+	popup.TextSize = unit.Sp(12)
+
+	cm.AddCompletor(&goCompletor{}, popup, gvcode.Trigger{
+		MinSize: 0,
+		KeyBinding: struct {
+			Name      key.Name
+			Modifiers key.Modifiers
+		}{
+			Name: "P", Modifiers: key.ModShortcut,
+		},
 	})
 
 	editorApp.state.WithOptions(
@@ -239,7 +235,7 @@ type goCompletor struct {
 func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
 	candicates := make([]gvcode.CompletionCandidate, 0)
 	for _, kw := range golangKeywords {
-		if strings.Contains(kw, ctx.Input) {
+		if strings.Contains(kw, ctx.Prefix) {
 			candicates = append(candicates, gvcode.CompletionCandidate{
 				Label:       kw,
 				InsertText:  kw,

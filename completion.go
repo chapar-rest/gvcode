@@ -2,7 +2,8 @@ package gvcode
 
 import (
 	"image"
-	"slices"
+	"strings"
+	"unicode/utf8"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
@@ -11,14 +12,9 @@ import (
 // Completion is the main auto-completion interface for the editor. A Completion object
 // schedules flow between the editor, the visual popup widget and completion algorithms(the Completor).
 type Completion interface {
-	// Set in what conditions the completion should be activated.
-	SetTriggers(triggers ...Trigger)
-	// SetCompletors adds Completors to Completion. Completors should run independently and return
+	// AddCompletors adds Completors to Completion. Completors should run independently and return
 	// candicates to Completion. All candicates are then re-ranked and presented to the user.
-	SetCompletors(completors ...Completor)
-
-	// SetPopup set the popup widget to be displayed when completion is activated.
-	SetPopup(popup CompletionPopup)
+	AddCompletor(completor Completor, popup CompletionPopup, trigger Trigger) error
 
 	// OnText update the completion context. If there is no ongoing session, it should start one.
 	OnText(ctx CompletionContext)
@@ -35,13 +31,16 @@ type Completion interface {
 	Layout(gtx layout.Context) layout.Dimensions
 }
 
-type CompletionPopup func(gtx layout.Context, items []CompletionCandidate) layout.Dimensions
+type CompletionPopup interface {
+	Layout(gtx layout.Context, items []CompletionCandidate) layout.Dimensions
+}
 
 type CompletionContext struct {
-	// start new session if there is no active session.
-	New bool
-	// Input is the text to complete.
-	Input    string
+	// Prefix is the text before the caret.
+	Prefix string
+	// Suffix is the text after the caret.
+	Suffix string
+	// The position of the caret.
 	Position struct {
 		// Line number of the caret where the typing is happening.
 		Line int
@@ -64,48 +63,42 @@ type CompletionCandidate struct {
 	Kind        string
 }
 
+// Completor defines a interface that each of the delegated completor must implement.
 type Completor interface {
 	Suggest(ctx CompletionContext) []CompletionCandidate
 }
 
-type Trigger interface {
-	ImplementsTrigger()
-}
-
-// Completion works as you type.
-// This is mutually exclusive with PrefixTrigger.
-type AutoTrigger struct {
-	// The minimum length in runes of the input to trigger completion.
+// Trigger
+type Trigger struct {
+	// The minimum length in runes of the prefix to trigger completion.
+	//
+	// This is mutually exclusive with Prefix.
 	MinSize int
-}
 
-// Special prefix characters triggers the completion.
-// This is mutually exclusive with AutoTrigger.
-type PrefixTrigger struct {
 	// Prefix that must be present to trigger the completion.
-	// If it is empty, any character will trigger the completion.
+	// If it is empty, any character will trigger the completion. Prefix should
+	// be removed when doing the completion, and should not be inserted when the
+	// completion is confirmed.
+	//
+	// This is mutually exclusive with MinSize.
 	Prefix string
-}
 
-// Special key binding triggers the completion.
-type KeyTrigger struct {
-	Name      key.Name
-	Modifiers key.Modifiers
-}
-
-func GetCompletionTrigger[T Trigger](triggers []Trigger) (T, bool) {
-	idx := slices.IndexFunc(triggers, func(item Trigger) bool {
-		_, ok := item.(T)
-		return ok
-	})
-
-	if idx < 0 {
-		return *new(T), false
+	// Special key binding triggers the completion.
+	KeyBinding struct {
+		Name      key.Name
+		Modifiers key.Modifiers
 	}
-
-	return triggers[idx].(T), true
 }
 
-func (a AutoTrigger) ImplementsTrigger()   {}
-func (p PrefixTrigger) ImplementsTrigger() {}
-func (k KeyTrigger) ImplementsTrigger()    {}
+func (tr Trigger) ActivateOnKey(evt key.Event) bool {
+	return tr.KeyBinding.Name == evt.Name &&
+		evt.Modifiers.Contain(tr.KeyBinding.Modifiers)
+}
+
+func (tr Trigger) ActivateOnPrefix(prefix string) bool {
+	return tr.Prefix != "" && strings.HasPrefix(prefix, tr.Prefix)
+}
+
+func (tr Trigger) ActivateOnPrefixLen(prefix string) bool {
+	return prefix != "" && utf8.RuneCountInString(prefix) >= tr.MinSize
+}

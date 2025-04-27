@@ -1,141 +1,220 @@
 package completion
 
 import (
+	"errors"
 	"image"
+	"slices"
 	"strings"
-	"sync"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
 	"github.com/oligo/gvcode"
 )
 
+type triggerKind uint8
+
+const (
+	prefixLenTrigger triggerKind = iota
+	prefixTrigger
+	keyTrigger
+)
+
 var _ gvcode.Completion = (*DefaultCompletion)(nil)
 
 type DefaultCompletion struct {
 	Editor     *gvcode.Editor
-	triggers   []gvcode.Trigger
-	completors []gvcode.Completor
+	completors []delegatedCompletor
+	triggers   map[*gvcode.Trigger]int
 	candicates []gvcode.CompletionCandidate
 	session    *session
-	mu         sync.Mutex
-	popup      gvcode.CompletionPopup
 }
 
-type session struct {
-	ctx     *gvcode.CompletionContext
+type delegatedCompletor struct {
 	trigger gvcode.Trigger
+	popup   gvcode.CompletionPopup
+	gvcode.Completor
 }
 
-func (dc *DefaultCompletion) SetTriggers(triggers ...gvcode.Trigger) {
-	dc.triggers = dc.triggers[:0]
-	dc.triggers = append(dc.triggers, triggers...)
-	if tr, exists := gvcode.GetCompletionTrigger[gvcode.KeyTrigger](dc.triggers); exists {
+// A session is started when some trigger is activated, and is destroyed when
+// the completion is canceled or confirmed.
+type session struct {
+	ctx         gvcode.CompletionContext
+	triggerKind triggerKind
+	// the actived trigger.
+	trigger *gvcode.Trigger
+	invalid bool
+}
+
+func newSession() *session {
+	return &session{}
+}
+
+func (s *session) update(ctx gvcode.CompletionContext) {
+	if s.invalid {
+		return
+	}
+
+	s.ctx = ctx
+}
+
+// A session triggered by a specific key binding cannot be
+// re-triggered by other triggers.
+func (s *session) triggerBy(tr *gvcode.Trigger, kind triggerKind) {
+	if s.invalid {
+		return
+	}
+
+	if s.trigger != nil && s.triggerKind == keyTrigger {
+		return
+	}
+
+	s.triggerKind = kind
+	s.trigger = tr
+}
+
+func (s *session) makeInvalid() {
+	s.invalid = true
+}
+
+func (s *session) isValid() bool {
+	return s != nil && !s.invalid && s.trigger != nil
+}
+
+func (dc *DefaultCompletion) AddCompletor(completor gvcode.Completor, popup gvcode.CompletionPopup, trigger gvcode.Trigger) error {
+	c := delegatedCompletor{
+		Completor: completor,
+		popup:     popup,
+		trigger:   trigger,
+	}
+
+	if trigger.MinSize > 0 && trigger.Prefix != "" {
+		return errors.New("invalid trigger: be sure to set MinSize or Prefix, not both")
+	}
+
+	duplicatedKey := slices.ContainsFunc(dc.completors, func(cm delegatedCompletor) bool {
+		return cm.trigger.KeyBinding.Name == trigger.KeyBinding.Name &&
+			cm.trigger.KeyBinding.Modifiers == trigger.KeyBinding.Modifiers
+	})
+	if duplicatedKey {
+		return errors.New("duplicated key binding")
+	}
+
+	if c.trigger.KeyBinding.Name != "" && c.trigger.KeyBinding.Modifiers != 0 {
 		dc.Editor.RegisterCommand(dc,
-			key.Filter{Name: tr.Name, Required: tr.Modifiers},
+			key.Filter{Name: c.trigger.KeyBinding.Name, Required: c.trigger.KeyBinding.Modifiers},
 			func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
-				dc.onKey()
+				dc.onKey(evt)
 				return nil
 			})
 	}
 
+	idx := len(dc.completors)
+	if dc.triggers == nil {
+		dc.triggers = make(map[*gvcode.Trigger]int)
+	}
+	dc.triggers[&c.trigger] = idx
+
+	dc.completors = append(dc.completors, c)
+	return nil
 }
 
-func (dc *DefaultCompletion) SetCompletors(completors ...gvcode.Completor) {
-	dc.completors = dc.completors[:0]
-	dc.completors = append(dc.completors, completors...)
-}
-
-func (dc *DefaultCompletion) onKey() {
-	ctx := dc.Editor.GetCompletionContext()
-	if dc.session == nil {
-		dc.session = &session{
-			ctx: &ctx,
-		}
-	} else {
-		dc.session.ctx = &ctx
+func (dc *DefaultCompletion) activeCompletor() *delegatedCompletor {
+	if dc.session == nil || dc.session.trigger == nil {
+		return nil
 	}
 
-	dc.runCompletors(ctx)
+	idx := dc.triggers[dc.session.trigger]
+	if idx < 0 || idx >= len(dc.completors) {
+		return nil
+	}
+
+	return &dc.completors[idx]
+}
+
+// onKey activates the completor when the registered key binding are pressed.
+// If there is a valid prefix to help to complete, the activated completor is run once.
+// The execution of the activated is repeated as the user type ahead, which is run by
+// the OnText method.
+func (dc *DefaultCompletion) onKey(evt key.Event) {
+	// cancel existing completion.
+	dc.Cancel()
+
+	var trigger *gvcode.Trigger
+	for tr := range dc.triggers {
+		if tr.ActivateOnKey(evt) {
+			trigger = tr
+			break
+		}
+	}
+
+	if trigger == nil {
+		return
+	}
+
+	ctx := dc.Editor.GetCompletionContext()
+	dc.session = newSession()
+	dc.session.update(ctx)
+	dc.session.triggerBy(trigger, keyTrigger)
+
+	dc.runCompletor(ctx, dc.activeCompletor())
 }
 
 func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
-	if ctx.Input == "" {
-		dc.Cancel()
-		return
-	}
-
-	if ctx.New {
-		if dc.session == nil {
-			dc.session = &session{
-				ctx: &ctx,
-			}
-		} else {
-			dc.session.ctx = &ctx
+	var trigger *gvcode.Trigger
+	var kind triggerKind
+	for tr := range dc.triggers {
+		if tr.ActivateOnPrefix(ctx.Prefix) {
+			trigger = tr
+			kind = prefixTrigger
+			break
 		}
-	} else if dc.session == nil {
+
+		if tr.ActivateOnPrefixLen(ctx.Prefix) {
+			trigger = tr
+			kind = prefixLenTrigger
+			break
+		}
+	}
+
+	if trigger != nil {
+		if dc.session == nil {
+			dc.session = newSession()
+		}
+
+		dc.session.update(ctx)
+		dc.session.triggerBy(trigger, kind)
+	} else {
+		if dc.session != nil && dc.session.triggerKind != keyTrigger {
+			// no activated prefix trigger, and no key trigger.
+			dc.Cancel()
+			return
+		}
+	}
+
+	if !dc.session.isValid() {
 		return
 	}
 
-	if !dc.trigger(&ctx) {
-		dc.Cancel()
-		return
-	}
-
-	dc.runCompletors(ctx)
+	dc.runCompletor(ctx, dc.activeCompletor())
 }
 
-func (dc *DefaultCompletion) runCompletors(ctx gvcode.CompletionContext) {
+func (dc *DefaultCompletion) runCompletor(ctx gvcode.CompletionContext, completor *delegatedCompletor) {
 	dc.candicates = dc.candicates[:0]
-	if len(dc.completors) == 0 {
+	if completor == nil {
 		return
 	}
 
-	wg := new(sync.WaitGroup)
-	wg.Add(len(dc.completors))
-
-	for _, c := range dc.completors {
-		go func() {
-			items := c.Suggest(ctx)
-			dc.mu.Lock()
-			defer dc.mu.Unlock()
-			dc.candicates = append(dc.candicates, items...)
-
-			wg.Done()
-		}()
+	if dc.session.triggerKind == prefixTrigger {
+		ctx.Prefix = strings.TrimPrefix(ctx.Prefix, dc.session.trigger.Prefix)
 	}
 
-	wg.Wait()
+	items := completor.Suggest(ctx)
+	dc.candicates = append(dc.candicates, items...)
 
 	if len(dc.candicates) == 0 {
 		dc.Cancel()
 		return
 	}
-	dc.rerank()
-}
-
-func (dc *DefaultCompletion) trigger(ctx *gvcode.CompletionContext) bool {
-	prefixTrigger, exists := gvcode.GetCompletionTrigger[gvcode.PrefixTrigger](dc.triggers)
-	if exists && strings.HasPrefix(ctx.Input, prefixTrigger.Prefix) {
-		// strip the trigger prefix from input.
-		ctx.Input = strings.TrimPrefix(ctx.Input, prefixTrigger.Prefix)
-		return true
-	}
-
-	autoTrigger, exists := gvcode.GetCompletionTrigger[gvcode.AutoTrigger](dc.triggers)
-	if !exists || len([]rune(ctx.Input)) < autoTrigger.MinSize {
-		return false
-	}
-
-	return true
-}
-
-func (dc *DefaultCompletion) rerank() {
-	// TODO
-}
-
-func (dc *DefaultCompletion) SetPopup(popup gvcode.CompletionPopup) {
-	dc.popup = popup
 }
 
 func (dc *DefaultCompletion) IsActive() bool {
@@ -151,11 +230,22 @@ func (dc *DefaultCompletion) Offset() image.Point {
 }
 
 func (dc *DefaultCompletion) Layout(gtx layout.Context) layout.Dimensions {
-	return dc.popup(gtx, dc.candicates)
+	completor := dc.activeCompletor()
+	if completor == nil {
+		return layout.Dimensions{}
+	}
+
+	if !dc.session.isValid() {
+		dc.session = nil
+	}
+
+	return completor.popup.Layout(gtx, dc.candicates)
 }
 
 func (dc *DefaultCompletion) Cancel() {
-	dc.session = nil
+	if dc.session != nil {
+		dc.session.makeInvalid()
+	}
 	dc.candicates = dc.candicates[:0]
 }
 

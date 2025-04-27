@@ -32,6 +32,7 @@ type CompletionPopup struct {
 	// TextSize configures the size the text displayed in the popup. If no value
 	// is provided, a reasonable value is set.
 	TextSize unit.Sp
+	Theme    *material.Theme
 }
 
 func NewCompletionPopup(editor *gvcode.Editor, cmp gvcode.Completion) *CompletionPopup {
@@ -41,7 +42,7 @@ func NewCompletionPopup(editor *gvcode.Editor, cmp gvcode.Completion) *Completio
 	}
 }
 
-func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items []gvcode.CompletionCandidate) layout.Dimensions {
+func (pop *CompletionPopup) Layout(gtx layout.Context, items []gvcode.CompletionCandidate) layout.Dimensions {
 	pop.itemsCount = len(items)
 	pop.update(gtx)
 
@@ -51,7 +52,7 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items
 	}
 
 	border := widget.Border{
-		Color:        adjustAlpha(th.Fg, 0xb0),
+		Color:        adjustAlpha(pop.Theme.Fg, 0xb0),
 		Width:        unit.Dp(1),
 		CornerRadius: unit.Dp(4),
 	}
@@ -66,12 +67,12 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, th *material.Theme, items
 		macro := op.Record(gtx.Ops)
 		dims := layout.UniformInset(unit.Dp(4)).Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
-				return pop.layout(gtx, th, items)
+				return pop.layout(gtx, pop.Theme, items)
 			})
 		callOp := macro.Stop()
 
 		defer clip.UniformRRect(image.Rectangle{Max: dims.Size}, gtx.Dp(unit.Dp(4))).Push(gtx.Ops).Pop()
-		paint.Fill(gtx.Ops, th.Bg)
+		paint.Fill(gtx.Ops, pop.Theme.Bg)
 		callOp.Add(gtx.Ops)
 		return dims
 	})
