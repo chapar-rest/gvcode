@@ -237,8 +237,10 @@ func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionC
 	for _, kw := range golangKeywords {
 		if strings.Contains(kw, ctx.Prefix) {
 			candicates = append(candicates, gvcode.CompletionCandidate{
-				Label:       kw,
-				InsertText:  kw,
+				Label: kw,
+				TextEdit: gvcode.TextEdit{
+					NewText: kw,
+				},
 				Description: kw,
 				Kind:        "text",
 			})

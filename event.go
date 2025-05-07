@@ -389,9 +389,19 @@ func (e *Editor) updateCompletor(cancel bool) {
 	e.completor.OnText(e.currentCompletionCtx())
 }
 
+func symbolSeperator(ch rune) bool {
+	if (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_' || ch == '.' {
+		return false
+	}
+
+	return true
+}
+
 func (e *Editor) currentCompletionCtx() CompletionContext {
-	word, wordOff := e.text.ReadWord(false)
-	prefix := []rune(word)[:wordOff]
+	prefix := e.text.ReadUntil(-1, symbolSeperator)
 	//log.Println("word, prefix and wordOff", word, string(prefix), wordOff)
 	ctx := CompletionContext{
 		Prefix: string(prefix),
@@ -399,11 +409,10 @@ func (e *Editor) currentCompletionCtx() CompletionContext {
 	ctx.Position.Line, ctx.Position.Column = e.text.CaretPos()
 	// scroll off will change after we update the position, so we use doc view position instead
 	// of viewport position.
-	ctx.Position.Coords = e.text.CaretCoords().Round().Add(e.text.ScrollOff())
+	ctx.Coords = e.text.CaretCoords().Round().Add(e.text.ScrollOff())
 
-	start, end := e.text.Selection()
-	ctx.Position.Start = start - len(prefix)
-	ctx.Position.End = end
+	start, _ := e.text.Selection()
+	ctx.Position.Runes = start
 	return ctx
 }
 

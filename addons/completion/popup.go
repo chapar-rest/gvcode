@@ -177,6 +177,7 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 		for i := len(pop.labels); i < pop.itemsCount; i++ {
 			pop.labels = append(pop.labels, &itemLabel{onClicked: func() {
 				pop.cmp.OnConfirm(i)
+				gtx.Execute(key.FocusCmd{Tag: pop.editor})
 				gtx.Execute(op.InvalidateCmd{})
 			}})
 		}

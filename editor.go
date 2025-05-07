@@ -325,6 +325,11 @@ func (e *Editor) CaretCoords() f32.Point {
 	return e.text.CaretCoords()
 }
 
+// ConvertPos convert a line/col position to rune offset.
+func (e *Editor) ConvertPos(line, col int) int {
+	return e.text.ConvertPos(line, col)
+}
+
 // Delete runes from the caret position. The sign of the argument specifies the
 // direction to delete: positive is forward, negative is backward.
 //

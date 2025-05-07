@@ -27,6 +27,24 @@ func (e *textView) FindParagraph(runeIdx int) (int, lt.Paragraph) {
 	return idx, e.layouter.Paragraphs[idx]
 }
 
+// ConvertPos convert a line/col position to rune offset.
+// line is counted by paragrah, and col is counted by rune.
+func (e *textView) ConvertPos(line, col int) int {
+	if line < 0 {
+		return 0
+	}
+
+	if line >= len(e.layouter.Paragraphs) {
+		p := e.layouter.Paragraphs[len(e.layouter.Paragraphs)-1]
+		return p.RuneOff + p.Runes
+	}
+
+	p := e.layouter.Paragraphs[line]
+	runeOff := min(p.RuneOff+col, p.RuneOff+p.Runes)
+	// Ensures that the final positions are on grapheme cluster boundaries.
+	return e.moveByGraphemes(runeOff, 0)
+}
+
 // selectedParagraphs returns the paragraphs that the carent selection covers.
 // If there's no selection, it returns the paragraph that the caret is in.
 func (e *textView) selectedParagraphs() []lt.Paragraph {

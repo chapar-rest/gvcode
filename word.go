@@ -66,10 +66,36 @@ func (e *textView) MoveWords(distance int, selAct selectionAction) {
 	e.clampCursorToGraphemes()
 }
 
+// readBySeperator reads in the specified direction from caretOff until the seperator returns false.
+// It returns the read text.
+func (e *textView) readBySeperator(direction int, caretOff int, seperator func(r rune) bool) []rune {
+	buf := make([]rune, 0)
+	for {
+		if caretOff < 0 || caretOff > e.Len() {
+			break
+		}
+
+		r, err := e.src.ReadRuneAt(caretOff)
+		if seperator(r) || err != nil {
+			break
+		}
+
+		if direction < 0 {
+			buf = slices.Insert(buf, 0, r)
+			caretOff--
+		} else {
+			buf = append(buf, r)
+			caretOff++
+		}
+	}
+
+	return buf
+}
+
 // ReadWord tries to read one word nearby the caret, returning the word if there's one,
 // and the offset of the caret in the word.
 //
-// The word boundary is checked using the same conditions as MoveWords.
+// The word boundary is checked using the word boundary characters or just spaces.
 func (e *textView) ReadWord(bySpace bool) (string, int) {
 	caret := e.closestToRune(max(e.caret.start, e.caret.end))
 	buf := make([]rune, 0)
@@ -81,32 +107,25 @@ func (e *textView) ReadWord(bySpace bool) (string, int) {
 		return e.isWordSeperator(r)
 	}
 
-	scanWord := func(direction int, caretOff int) int {
-		var prev = caretOff
-		for {
-			if caretOff < 0 || caretOff > e.Len() {
-				break
-			}
+	left := e.readBySeperator(-1, caret.Runes-1, seperator)
+	buf = append(buf, left...)
+	right := e.readBySeperator(1, caret.Runes, seperator)
+	buf = append(buf, right...)
 
-			r, err := e.src.ReadRuneAt(caretOff)
-			if seperator(r) || err != nil {
-				break
-			}
+	return string(buf), len(left)
+}
 
-			if direction < 0 {
-				buf = slices.Insert(buf, 0, r)
-				caretOff--
-			} else {
-				buf = append(buf, r)
-				caretOff++
-			}
-		}
+// ReadUntil reads in the specified direction from the current caret position until the
+// seperator returns false. It returns the read text.
+func (e *textView) ReadUntil(direction int, seperator func(r rune) bool) string {
+	caret := e.closestToRune(max(e.caret.start, e.caret.end))
+	var buf []rune
 
-		return prev - caretOff
+	if direction <= 0 {
+		buf = e.readBySeperator(direction, caret.Runes-1, seperator)
+	} else {
+		buf = e.readBySeperator(1, caret.Runes, seperator)
 	}
 
-	moves := scanWord(-1, caret.Runes-1)
-	scanWord(1, caret.Runes)
-
-	return string(buf), moves
+	return string(buf)
 }

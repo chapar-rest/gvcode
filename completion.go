@@ -9,6 +9,22 @@ import (
 	"gioui.org/layout"
 )
 
+// Position is a position in the eidtor. Line/column and Runes may not
+// be set at the same time depending on the use cases.
+type Position struct {
+	// Line number of the caret where the typing is happening.
+	Line int
+	// Column is the rune offset from the start of the line.
+	Column int
+	// Runes is the rune offset in the editor text of the input.
+	Runes int
+}
+
+type EditRange struct {
+	Start Position
+	End   Position
+}
+
 // Completion is the main auto-completion interface for the editor. A Completion object
 // schedules flow between the editor, the visual popup widget and completion algorithms(the Completor).
 type Completion interface {
@@ -40,27 +56,34 @@ type CompletionContext struct {
 	Prefix string
 	// Suffix is the text after the caret.
 	Suffix string
-	// The position of the caret.
-	Position struct {
-		// Line number of the caret where the typing is happening.
-		Line int
-		// Column is the rune offset from the start of the line.
-		Column int
-		// Coordinates of the caret. Scroll off will change after we update the position,
-		// so we use doc view position instead of viewport position.
-		Coords image.Point
-		// Start is the start offset in the editor text of the input, measured in runes.
-		Start int
-		// End is the end offset in the editor text of the input, measured in runes.
-		End int
-	}
+	// Coordinates of the caret. Scroll off will change after we update the position,
+	// so we use doc view position instead of viewport position.
+	Coords image.Point
+	// The position of the caret in line/column and selection range.
+	Position Position
 }
 
+// CompletionCandidate are results returned from Completor, to be presented
+// to the user to select from.
 type CompletionCandidate struct {
-	Label       string
-	InsertText  string
+	// Label is a short text shown to user to indicate
+	// what the candicate looks like.
+	Label string
+	// TextEdit is the real text with range info to be
+	// inserted into the editor.
+	TextEdit TextEdit
+	// A short description of the candicate.
 	Description string
-	Kind        string
+	// Kind of the candicate, for example, function,
+	// class, keywords etc.
+	Kind string
+}
+
+// TextEdit is the text with range info to be
+// inserted into the editor, used in auto-completion.
+type TextEdit struct {
+	NewText   string
+	EditRange EditRange
 }
 
 // Completor defines a interface that each of the delegated completor must implement.

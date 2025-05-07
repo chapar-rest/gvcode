@@ -5,6 +5,7 @@ import (
 	"image"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
@@ -226,7 +227,7 @@ func (dc *DefaultCompletion) Offset() image.Point {
 		return image.Point{}
 	}
 
-	return dc.session.ctx.Position.Coords
+	return dc.session.ctx.Coords
 }
 
 func (dc *DefaultCompletion) Layout(gtx layout.Context) layout.Dimensions {
@@ -258,7 +259,21 @@ func (dc *DefaultCompletion) OnConfirm(idx int) {
 	}
 
 	candidate := dc.candicates[idx]
-	dc.Editor.SetCaret(dc.session.ctx.Position.Start, dc.session.ctx.Position.End)
-	dc.Editor.Insert(candidate.InsertText)
+	editRange := candidate.TextEdit.EditRange
+	if editRange == (gvcode.EditRange{}) {
+		// No range is set, replace the prefix with the candicate text.
+		dc.Editor.SetCaret(dc.session.ctx.Position.Runes-utf8.RuneCountInString(dc.session.ctx.Prefix), dc.session.ctx.Position.Runes)
+	} else {
+		caretStart, caretEnd := editRange.Start.Runes, editRange.End.Runes
+		// Line/column is set, convert the line/column position to rune offsets.
+		if (editRange.Start != gvcode.Position{}) && editRange.End != (gvcode.Position{}) {
+			caretStart = dc.Editor.ConvertPos(editRange.Start.Line, editRange.Start.Column)
+			caretEnd = dc.Editor.ConvertPos(editRange.End.Line, editRange.End.Column)
+		}
+		// set the selection using range provided by the completor.
+		dc.Editor.SetCaret(caretStart, caretEnd)
+	}
+
+	dc.Editor.Insert(candidate.TextEdit.NewText)
 	dc.Cancel()
 }
