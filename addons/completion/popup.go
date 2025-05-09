@@ -51,6 +51,10 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, items []gvcode.Completion
 		return layout.Dimensions{}
 	}
 
+	if pop.itemsCount == 0 {
+		return layout.Dimensions{}
+	}
+
 	border := widget.Border{
 		Color:        adjustAlpha(pop.Theme.Fg, 0xb0),
 		Width:        unit.Dp(1),

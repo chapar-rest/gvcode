@@ -4,6 +4,7 @@ import (
 	"errors"
 	"image"
 	"slices"
+	"time"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
@@ -14,8 +15,9 @@ var _ gvcode.Completion = (*DefaultCompletion)(nil)
 
 type DefaultCompletion struct {
 	Editor     *gvcode.Editor
+	runner     *deferredRunner[gvcode.CompletionCandidate]
 	completors []*delegatedCompletor
-	candicates []gvcode.CompletionCandidate
+	candidates []gvcode.CompletionCandidate
 	session    *session
 }
 
@@ -51,6 +53,15 @@ func (dc *DefaultCompletion) AddCompletor(completor gvcode.Completor, popup gvco
 
 	dc.completors = append(dc.completors, c)
 	return nil
+}
+
+// SetDelay set a delay duration of run completion after the user
+// stopped typing. This makes the UI more responsive when the user
+// types fast as it reduces the unnecessary completion computation.
+func (dc *DefaultCompletion) SetDelay(delay time.Duration) {
+	if dc.runner == nil {
+		dc.runner = newRunner[gvcode.CompletionCandidate](delay)
+	}
 }
 
 func canTrigger(tr gvcode.Trigger, input string) (bool, triggerKind) {
@@ -118,7 +129,9 @@ func (dc *DefaultCompletion) onKey(evt key.Event) {
 	dc.session = newSession(cmp, keyTrigger)
 	dc.session.Update(ctx)
 
-	dc.runCompletor(ctx, cmp)
+	dc.runner.Async(func() []gvcode.CompletionCandidate {
+		return dc.runCompletor(ctx)
+	})
 }
 
 func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
@@ -132,21 +145,41 @@ func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
 		return
 	}
 
-	dc.runCompletor(ctx, dc.session.Completor())
+	if dc.runner != nil {
+		dc.runner.Defer(func() []gvcode.CompletionCandidate {
+			return dc.runCompletor(ctx)
+		})
+	} else {
+		dc.runner.Async(func() []gvcode.CompletionCandidate {
+			return dc.runCompletor(ctx)
+		})
+	}
 }
 
-func (dc *DefaultCompletion) runCompletor(ctx gvcode.CompletionContext, completor *delegatedCompletor) {
-	dc.candicates = dc.candicates[:0]
-	if completor == nil {
-		return
+func (dc *DefaultCompletion) runCompletor(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
+	if !dc.session.IsValid() {
+		return nil
 	}
 
-	items := completor.Suggest(ctx)
-	dc.candicates = append(dc.candicates, items...)
+	completor := dc.session.Completor()
+	if completor == nil {
+		return nil
+	}
 
-	if len(dc.candicates) == 0 {
-		dc.Cancel()
-		return
+	return completor.Suggest(ctx)
+
+}
+
+func (dc *DefaultCompletion) updateCandidates() {
+	select {
+	case items := <-dc.runner.ResultChan():
+		dc.candidates = dc.candidates[:0]
+		dc.candidates = append(dc.candidates, items...)
+		if len(dc.candidates) == 0 {
+			dc.Cancel()
+		}
+	default:
+		// no update
 	}
 }
 
@@ -163,6 +196,8 @@ func (dc *DefaultCompletion) Offset() image.Point {
 }
 
 func (dc *DefaultCompletion) Layout(gtx layout.Context) layout.Dimensions {
+	dc.updateCandidates()
+
 	if dc.session == nil {
 		return layout.Dimensions{}
 	}
@@ -174,25 +209,25 @@ func (dc *DefaultCompletion) Layout(gtx layout.Context) layout.Dimensions {
 		dc.session = nil
 	}
 
-	return completor.popup.Layout(gtx, dc.candicates)
+	return completor.popup.Layout(gtx, dc.candidates)
 }
 
 func (dc *DefaultCompletion) Cancel() {
 	if dc.session != nil {
 		dc.session.makeInvalid()
 	}
-	dc.candicates = dc.candicates[:0]
+	dc.candidates = dc.candidates[:0]
 }
 
 func (dc *DefaultCompletion) OnConfirm(idx int) {
 	if dc.Editor == nil {
 		return
 	}
-	if idx < 0 || idx >= len(dc.candicates) {
+	if idx < 0 || idx >= len(dc.candidates) {
 		return
 	}
 
-	candidate := dc.candicates[idx]
+	candidate := dc.candidates[idx]
 	editRange := candidate.TextEdit.EditRange
 	if editRange == (gvcode.EditRange{}) {
 		// No range is set, invalid candidate.

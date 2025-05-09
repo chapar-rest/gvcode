@@ -14,10 +14,6 @@ const (
 	keyTrigger
 )
 
-const (
-	maxBufSize = 32
-)
-
 type triggerState struct {
 	triggerKind triggerKind
 	// the actived completor.
