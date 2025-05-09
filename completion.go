@@ -2,35 +2,17 @@ package gvcode
 
 import (
 	"image"
-	"strings"
-	"unicode/utf8"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
 )
 
-// Position is a position in the eidtor. Line/column and Runes may not
-// be set at the same time depending on the use cases.
-type Position struct {
-	// Line number of the caret where the typing is happening.
-	Line int
-	// Column is the rune offset from the start of the line.
-	Column int
-	// Runes is the rune offset in the editor text of the input.
-	Runes int
-}
-
-type EditRange struct {
-	Start Position
-	End   Position
-}
-
 // Completion is the main auto-completion interface for the editor. A Completion object
 // schedules flow between the editor, the visual popup widget and completion algorithms(the Completor).
 type Completion interface {
 	// AddCompletors adds Completors to Completion. Completors should run independently and return
-	// candicates to Completion. All candicates are then re-ranked and presented to the user.
-	AddCompletor(completor Completor, popup CompletionPopup, trigger Trigger) error
+	// candidates to Completion. A popup is also required to present the cadidates to user.
+	AddCompletor(completor Completor, popup CompletionPopup) error
 
 	// OnText update the completion context. If there is no ongoing session, it should start one.
 	OnText(ctx CompletionContext)
@@ -51,11 +33,29 @@ type CompletionPopup interface {
 	Layout(gtx layout.Context, items []CompletionCandidate) layout.Dimensions
 }
 
+// Position is a position in the eidtor. Line/column and Runes may not
+// be set at the same time depending on the use cases.
+type Position struct {
+	// Line number of the caret where the typing is happening.
+	Line int
+	// Column is the rune offset from the start of the line.
+	Column int
+	// Runes is the rune offset in the editor text of the input.
+	Runes int
+}
+
+type EditRange struct {
+	Start Position
+	End   Position
+}
+
 type CompletionContext struct {
-	// Prefix is the text before the caret.
-	Prefix string
-	// Suffix is the text after the caret.
-	Suffix string
+	// The last key input.
+	Input string
+	// // Prefix is the text before the caret.
+	// Prefix string
+	// // Suffix is the text after the caret.
+	// Suffix string
 	// Coordinates of the caret. Scroll off will change after we update the position,
 	// so we use doc view position instead of viewport position.
 	Coords image.Point
@@ -86,25 +86,42 @@ type TextEdit struct {
 	EditRange EditRange
 }
 
+func NewTextEditWithRuneOffset(text string, start, end int) TextEdit {
+	return TextEdit{
+		NewText: text,
+		EditRange: EditRange{
+			Start: Position{Runes: start},
+			End:   Position{Runes: end},
+		},
+	}
+}
+
+func NewTextEditWithPos(text string, start Position, end Position) TextEdit {
+	return TextEdit{
+		NewText: text,
+		EditRange: EditRange{
+			Start: start,
+			End:   end,
+		},
+	}
+}
+
 // Completor defines a interface that each of the delegated completor must implement.
 type Completor interface {
+	Trigger() Trigger
 	Suggest(ctx CompletionContext) []CompletionCandidate
 }
 
 // Trigger
 type Trigger struct {
-	// The minimum length in runes of the prefix to trigger completion.
-	//
-	// This is mutually exclusive with Prefix.
-	MinSize int
+	// Characters that must be present before the caret to trigger the completion.
+	// If it is empty, any character will trigger the completion.
+	Characters []string
 
-	// Prefix that must be present to trigger the completion.
-	// If it is empty, any character will trigger the completion. Prefix should
-	// be removed when doing the completion, and should not be inserted when the
-	// completion is confirmed.
-	//
-	// This is mutually exclusive with MinSize.
-	Prefix string
+	// Trigger completion even the caret is in side of comment.
+	Comment bool
+	// Trigger completion even the caret is in side of string(quote pair).
+	String bool
 
 	// Special key binding triggers the completion.
 	KeyBinding struct {
@@ -116,12 +133,4 @@ type Trigger struct {
 func (tr Trigger) ActivateOnKey(evt key.Event) bool {
 	return tr.KeyBinding.Name == evt.Name &&
 		evt.Modifiers.Contain(tr.KeyBinding.Modifiers)
-}
-
-func (tr Trigger) ActivateOnPrefix(prefix string) bool {
-	return tr.Prefix != "" && strings.HasPrefix(prefix, tr.Prefix)
-}
-
-func (tr Trigger) ActivateOnPrefixLen(prefix string) bool {
-	return prefix != "" && utf8.RuneCountInString(prefix) >= tr.MinSize
 }

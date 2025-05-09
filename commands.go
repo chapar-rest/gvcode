@@ -175,7 +175,7 @@ func (e *Editor) buildBuiltinCommands() {
 					}
 				} else {
 					if e.Delete(-1) != 0 {
-						e.updateCompletor(true)
+						e.updateCompletor("", true)
 						return ChangeEvent{}
 					}
 				}

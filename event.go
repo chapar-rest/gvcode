@@ -373,10 +373,10 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 	// Reset caret xoff.
 	e.text.MoveCaret(0, 0)
 	// start to auto-complete, if there is a configured Completion.
-	e.updateCompletor(false)
+	e.updateCompletor(ke.Text, false)
 }
 
-func (e *Editor) updateCompletor(cancel bool) {
+func (e *Editor) updateCompletor(input string, cancel bool) {
 	if e.completor == nil {
 		return
 	}
@@ -386,40 +386,27 @@ func (e *Editor) updateCompletor(cancel bool) {
 		return
 	}
 
-	e.completor.OnText(e.currentCompletionCtx())
+	e.completor.OnText(e.currentCompletionCtx(input))
 }
 
-func symbolSeperator(ch rune) bool {
-	if (ch >= 'a' && ch <= 'z') ||
-		(ch >= 'A' && ch <= 'Z') ||
-		(ch >= '0' && ch <= '9') ||
-		ch == '_' || ch == '.' {
-		return false
-	}
-
-	return true
-}
-
-func (e *Editor) currentCompletionCtx() CompletionContext {
-	prefix := e.text.ReadUntil(-1, symbolSeperator)
-	//log.Println("word, prefix and wordOff", word, string(prefix), wordOff)
-	ctx := CompletionContext{
-		Prefix: string(prefix),
-	}
+func (e *Editor) currentCompletionCtx(input string) CompletionContext {
+	ctx := CompletionContext{Input: input}
 	ctx.Position.Line, ctx.Position.Column = e.text.CaretPos()
-	// scroll off will change after we update the position, so we use doc view position instead
-	// of viewport position.
+	// scroll off will change after we update the position, so we use doc
+	// view position instead of viewport position.
 	ctx.Coords = e.text.CaretCoords().Round().Add(e.text.ScrollOff())
 
-	start, _ := e.text.Selection()
-	ctx.Position.Runes = start
+	// start and end should be the same, but there's a bug in text.MoveCaret
+	//  that makes start and end unequal, so we use end here.
+	_, end := e.text.Selection()
+	ctx.Position.Runes = end
 	return ctx
 }
 
 // GetCompletionContext returns a context from the current caret position.
 // This is usually used in the condition of a key triggered completion.
 func (e *Editor) GetCompletionContext() CompletionContext {
-	return e.currentCompletionCtx()
+	return e.currentCompletionCtx("")
 }
 
 func (e *Editor) onPasteEvent(ke transfer.DataEvent) EditorEvent {

@@ -330,6 +330,12 @@ func (e *Editor) ConvertPos(line, col int) int {
 	return e.text.ConvertPos(line, col)
 }
 
+// ReadUntil reads in the specified direction from the current caret position until the
+// seperator returns false. It returns the read text.
+func (e *Editor) ReadUntil(direction int, seperator func(r rune) bool) string {
+	return e.text.ReadUntil(direction, seperator)
+}
+
 // Delete runes from the caret position. The sign of the argument specifies the
 // direction to delete: positive is forward, negative is backward.
 //

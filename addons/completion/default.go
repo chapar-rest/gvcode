@@ -4,209 +4,141 @@ import (
 	"errors"
 	"image"
 	"slices"
-	"strings"
-	"unicode/utf8"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
 	"github.com/oligo/gvcode"
 )
 
-type triggerKind uint8
-
-const (
-	prefixLenTrigger triggerKind = iota
-	prefixTrigger
-	keyTrigger
-)
-
 var _ gvcode.Completion = (*DefaultCompletion)(nil)
 
 type DefaultCompletion struct {
 	Editor     *gvcode.Editor
-	completors []delegatedCompletor
-	triggers   map[*gvcode.Trigger]int
+	completors []*delegatedCompletor
 	candicates []gvcode.CompletionCandidate
 	session    *session
 }
 
 type delegatedCompletor struct {
-	trigger gvcode.Trigger
-	popup   gvcode.CompletionPopup
+	popup gvcode.CompletionPopup
 	gvcode.Completor
 }
 
-// A session is started when some trigger is activated, and is destroyed when
-// the completion is canceled or confirmed.
-type session struct {
-	ctx         gvcode.CompletionContext
-	triggerKind triggerKind
-	// the actived trigger.
-	trigger *gvcode.Trigger
-	invalid bool
-}
-
-func newSession() *session {
-	return &session{}
-}
-
-func (s *session) update(ctx gvcode.CompletionContext) {
-	if s.invalid {
-		return
-	}
-
-	s.ctx = ctx
-}
-
-// A session triggered by a specific key binding cannot be
-// re-triggered by other triggers.
-func (s *session) triggerBy(tr *gvcode.Trigger, kind triggerKind) {
-	if s.invalid {
-		return
-	}
-
-	if s.trigger != nil && s.triggerKind == keyTrigger {
-		return
-	}
-
-	s.triggerKind = kind
-	s.trigger = tr
-}
-
-func (s *session) makeInvalid() {
-	s.invalid = true
-}
-
-func (s *session) isValid() bool {
-	return s != nil && !s.invalid && s.trigger != nil
-}
-
-func (dc *DefaultCompletion) AddCompletor(completor gvcode.Completor, popup gvcode.CompletionPopup, trigger gvcode.Trigger) error {
-	c := delegatedCompletor{
+func (dc *DefaultCompletion) AddCompletor(completor gvcode.Completor, popup gvcode.CompletionPopup) error {
+	c := &delegatedCompletor{
 		Completor: completor,
 		popup:     popup,
-		trigger:   trigger,
 	}
 
-	if trigger.MinSize > 0 && trigger.Prefix != "" {
-		return errors.New("invalid trigger: be sure to set MinSize or Prefix, not both")
-	}
+	trigger := completor.Trigger()
 
-	duplicatedKey := slices.ContainsFunc(dc.completors, func(cm delegatedCompletor) bool {
-		return cm.trigger.KeyBinding.Name == trigger.KeyBinding.Name &&
-			cm.trigger.KeyBinding.Modifiers == trigger.KeyBinding.Modifiers
+	duplicatedKey := slices.ContainsFunc(dc.completors, func(cm *delegatedCompletor) bool {
+		tr := cm.Completor.Trigger()
+		return tr.KeyBinding.Name == trigger.KeyBinding.Name && tr.KeyBinding.Modifiers == trigger.KeyBinding.Modifiers
 	})
 	if duplicatedKey {
 		return errors.New("duplicated key binding")
 	}
 
-	if c.trigger.KeyBinding.Name != "" && c.trigger.KeyBinding.Modifiers != 0 {
+	if trigger.KeyBinding.Name != "" && trigger.KeyBinding.Modifiers != 0 {
 		dc.Editor.RegisterCommand(dc,
-			key.Filter{Name: c.trigger.KeyBinding.Name, Required: c.trigger.KeyBinding.Modifiers},
+			key.Filter{Name: trigger.KeyBinding.Name, Required: trigger.KeyBinding.Modifiers},
 			func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
 				dc.onKey(evt)
 				return nil
 			})
 	}
 
-	idx := len(dc.completors)
-	if dc.triggers == nil {
-		dc.triggers = make(map[*gvcode.Trigger]int)
-	}
-	dc.triggers[&c.trigger] = idx
-
 	dc.completors = append(dc.completors, c)
 	return nil
 }
 
-func (dc *DefaultCompletion) activeCompletor() *delegatedCompletor {
-	if dc.session == nil || dc.session.trigger == nil {
-		return nil
+func canTrigger(tr gvcode.Trigger, input string) (bool, triggerKind) {
+	// check explicit trigger characters.
+	if slices.Contains(tr.Characters, input) {
+		return true, charTrigger
 	}
 
-	idx := dc.triggers[dc.session.trigger]
-	if idx < 0 || idx >= len(dc.completors) {
-		return nil
+	// else check other allowed characters
+	char := []rune(input)[0]
+	if isSymbolChar(char) {
+		return true, autoTrigger
 	}
 
-	return &dc.completors[idx]
+	return false, 0
+}
+
+func (dc *DefaultCompletion) triggerOnInput(ctx gvcode.CompletionContext) {
+	if dc.session != nil && dc.session.IsValid() {
+		dc.session.Update(ctx)
+		return
+	}
+
+	var completor *delegatedCompletor
+	var kind triggerKind
+
+	for _, cmp := range dc.completors {
+		yes, k := canTrigger(cmp.Trigger(), ctx.Input)
+		if yes {
+			completor = cmp
+			kind = k
+			break
+		}
+	}
+
+	if completor != nil {
+		if dc.session == nil {
+			dc.session = newSession(completor, kind)
+		}
+
+		dc.session.Update(ctx)
+	}
 }
 
 // onKey activates the completor when the registered key binding are pressed.
-// If there is a valid prefix to help to complete, the activated completor is run once.
-// The execution of the activated is repeated as the user type ahead, which is run by
-// the OnText method.
+// The execution of the activated completor is repeated as the user type ahead,
+// which is run by the OnText method.
 func (dc *DefaultCompletion) onKey(evt key.Event) {
 	// cancel existing completion.
 	dc.Cancel()
 
-	var trigger *gvcode.Trigger
-	for tr := range dc.triggers {
-		if tr.ActivateOnKey(evt) {
-			trigger = tr
+	var cmp *delegatedCompletor
+	for _, c := range dc.completors {
+		if c.Trigger().ActivateOnKey(evt) {
+			cmp = c
 			break
 		}
 	}
 
-	if trigger == nil {
+	if cmp == nil {
 		return
 	}
 
 	ctx := dc.Editor.GetCompletionContext()
-	dc.session = newSession()
-	dc.session.update(ctx)
-	dc.session.triggerBy(trigger, keyTrigger)
+	dc.session = newSession(cmp, keyTrigger)
+	dc.session.Update(ctx)
 
-	dc.runCompletor(ctx, dc.activeCompletor())
+	dc.runCompletor(ctx, cmp)
 }
 
 func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
-	var trigger *gvcode.Trigger
-	var kind triggerKind
-	for tr := range dc.triggers {
-		if tr.ActivateOnPrefix(ctx.Prefix) {
-			trigger = tr
-			kind = prefixTrigger
-			break
-		}
-
-		if tr.ActivateOnPrefixLen(ctx.Prefix) {
-			trigger = tr
-			kind = prefixLenTrigger
-			break
-		}
-	}
-
-	if trigger != nil {
-		if dc.session == nil {
-			dc.session = newSession()
-		}
-
-		dc.session.update(ctx)
-		dc.session.triggerBy(trigger, kind)
-	} else {
-		if dc.session != nil && dc.session.triggerKind != keyTrigger {
-			// no activated prefix trigger, and no key trigger.
-			dc.Cancel()
-			return
-		}
-	}
-
-	if !dc.session.isValid() {
+	if ctx.Input == "" {
+		dc.Cancel()
 		return
 	}
 
-	dc.runCompletor(ctx, dc.activeCompletor())
+	dc.triggerOnInput(ctx)
+	if !dc.session.IsValid() {
+		return
+	}
+
+	dc.runCompletor(ctx, dc.session.Completor())
 }
 
 func (dc *DefaultCompletion) runCompletor(ctx gvcode.CompletionContext, completor *delegatedCompletor) {
 	dc.candicates = dc.candicates[:0]
 	if completor == nil {
 		return
-	}
-
-	if dc.session.triggerKind == prefixTrigger {
-		ctx.Prefix = strings.TrimPrefix(ctx.Prefix, dc.session.trigger.Prefix)
 	}
 
 	items := completor.Suggest(ctx)
@@ -231,12 +163,14 @@ func (dc *DefaultCompletion) Offset() image.Point {
 }
 
 func (dc *DefaultCompletion) Layout(gtx layout.Context) layout.Dimensions {
-	completor := dc.activeCompletor()
-	if completor == nil {
+	if dc.session == nil {
 		return layout.Dimensions{}
 	}
 
-	if !dc.session.isValid() {
+	completor := dc.session.Completor()
+	// when a session is marked as invalid, we'll have to still layout once to
+	// reset the popup to unregister the event handler.
+	if !dc.session.IsValid() {
 		dc.session = nil
 	}
 
@@ -261,12 +195,14 @@ func (dc *DefaultCompletion) OnConfirm(idx int) {
 	candidate := dc.candicates[idx]
 	editRange := candidate.TextEdit.EditRange
 	if editRange == (gvcode.EditRange{}) {
-		// No range is set, replace the prefix with the candicate text.
-		dc.Editor.SetCaret(dc.session.ctx.Position.Runes-utf8.RuneCountInString(dc.session.ctx.Prefix), dc.session.ctx.Position.Runes)
+		// No range is set, invalid candidate.
+		logger.Error("No range is set, invalid candidate")
+		return
 	} else {
 		caretStart, caretEnd := editRange.Start.Runes, editRange.End.Runes
-		// Line/column is set, convert the line/column position to rune offsets.
-		if (editRange.Start != gvcode.Position{}) && editRange.End != (gvcode.Position{}) {
+
+		// Assume line/column is set, convert the line/column position to rune offsets.
+		if caretStart <= 0 && caretEnd <= 0 {
 			caretStart = dc.Editor.ConvertPos(editRange.Start.Line, editRange.Start.Column)
 			caretEnd = dc.Editor.ConvertPos(editRange.End.Line, editRange.End.Column)
 		}

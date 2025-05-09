@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"gioui.org/app"
 	"gioui.org/font"
@@ -159,15 +160,7 @@ func main() {
 	popup.Theme = th
 	popup.TextSize = unit.Sp(12)
 
-	cm.AddCompletor(&goCompletor{}, popup, gvcode.Trigger{
-		MinSize: 0,
-		KeyBinding: struct {
-			Name      key.Name
-			Modifiers key.Modifiers
-		}{
-			Name: "P", Modifiers: key.ModShortcut,
-		},
-	})
+	cm.AddCompletor(&goCompletor{editor: editorApp.state}, popup)
 
 	editorApp.state.WithOptions(
 		// gvcode.WithSoftTab(true),
@@ -230,16 +223,45 @@ var golangKeywords = []string{
 }
 
 type goCompletor struct {
+	editor *gvcode.Editor
+}
+
+func isSymbolSeperator(ch rune) bool {
+	if (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_' {
+		return false
+	}
+
+	return true
+}
+
+func (c *goCompletor) Trigger() gvcode.Trigger {
+	return gvcode.Trigger{
+		Characters: []string{"."},
+		KeyBinding: struct {
+			Name      key.Name
+			Modifiers key.Modifiers
+		}{
+			Name: "P", Modifiers: key.ModShortcut,
+		},
+	}
 }
 
 func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
+	prefix := c.editor.ReadUntil(-1, isSymbolSeperator)
 	candicates := make([]gvcode.CompletionCandidate, 0)
 	for _, kw := range golangKeywords {
-		if strings.Contains(kw, ctx.Prefix) {
+		if strings.Contains(kw, prefix) {
 			candicates = append(candicates, gvcode.CompletionCandidate{
 				Label: kw,
 				TextEdit: gvcode.TextEdit{
 					NewText: kw,
+					EditRange: gvcode.EditRange{
+						Start: gvcode.Position{Runes: ctx.Position.Runes - utf8.RuneCountInString(prefix)},
+						End:   gvcode.Position{Runes: ctx.Position.Runes},
+					},
 				},
 				Description: kw,
 				Kind:        "text",
