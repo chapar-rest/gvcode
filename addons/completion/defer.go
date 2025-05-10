@@ -13,17 +13,25 @@ type deferredRunner[T any] struct {
 }
 
 func newRunner[T any](delay time.Duration) *deferredRunner[T] {
-	if delay == time.Duration(0) {
-		delay = time.Millisecond * 50
-	}
-
 	return &deferredRunner[T]{
 		delay:      delay,
 		resultChan: make(chan []T, 1),
 	}
 }
 
-func (r *deferredRunner[T]) Defer(deferredFunc func() []T) {
+func (r *deferredRunner[T]) SetDelay(delay time.Duration) {
+	r.delay = delay
+}
+
+func (r *deferredRunner[T]) Run(deferredFunc func() []T) {
+	if r.delay == 0 {
+		r.Async(deferredFunc)
+	} else {
+		r.deferRun(deferredFunc)
+	}
+}
+
+func (r *deferredRunner[T]) deferRun(deferredFunc func() []T) {
 	if !r.IsRunning() {
 		r.start(deferredFunc)
 	}
@@ -32,8 +40,8 @@ func (r *deferredRunner[T]) Defer(deferredFunc func() []T) {
 }
 
 func (r *deferredRunner[T]) Async(deferredFunc func() []T) {
-	if r.delay != 0 {
-		return
+	if r.isRunning {
+		r.timer.Stop()
 	}
 
 	go func() {

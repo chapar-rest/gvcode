@@ -52,6 +52,9 @@ func (dc *DefaultCompletion) AddCompletor(completor gvcode.Completor, popup gvco
 	}
 
 	dc.completors = append(dc.completors, c)
+	if dc.runner == nil {
+		dc.runner = newRunner[gvcode.CompletionCandidate](0)
+	}
 	return nil
 }
 
@@ -61,6 +64,8 @@ func (dc *DefaultCompletion) AddCompletor(completor gvcode.Completor, popup gvco
 func (dc *DefaultCompletion) SetDelay(delay time.Duration) {
 	if dc.runner == nil {
 		dc.runner = newRunner[gvcode.CompletionCandidate](delay)
+	} else {
+		dc.runner.SetDelay(delay)
 	}
 }
 
@@ -128,7 +133,7 @@ func (dc *DefaultCompletion) onKey(evt key.Event) {
 	ctx := dc.Editor.GetCompletionContext()
 	dc.session = newSession(cmp, keyTrigger)
 	dc.session.Update(ctx)
-
+	// Run completor without delay.
 	dc.runner.Async(func() []gvcode.CompletionCandidate {
 		return dc.runCompletor(ctx)
 	})
@@ -145,15 +150,9 @@ func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
 		return
 	}
 
-	if dc.runner != nil {
-		dc.runner.Defer(func() []gvcode.CompletionCandidate {
-			return dc.runCompletor(ctx)
-		})
-	} else {
-		dc.runner.Async(func() []gvcode.CompletionCandidate {
-			return dc.runCompletor(ctx)
-		})
-	}
+	dc.runner.Run(func() []gvcode.CompletionCandidate {
+		return dc.runCompletor(ctx)
+	})
 }
 
 func (dc *DefaultCompletion) runCompletor(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {

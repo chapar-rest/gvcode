@@ -104,7 +104,6 @@ func (pop *CompletionPopup) updateSelection(direction int) {
 }
 
 func (pop *CompletionPopup) reset() {
-	pop.cmp.Cancel()
 	pop.focused = 0
 	pop.labels = pop.labels[:0]
 	pop.list.ScrollTo(0)
@@ -136,7 +135,7 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 	)
 	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameEnter, Optional: key.ModShift},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
-			if pop.focused >= 0 {
+			if pop.focused >= 0 && len(pop.labels) > 0 {
 				// simulate a click
 				pop.labels[pop.focused].Click()
 			}
@@ -146,7 +145,7 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 
 	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameReturn, Optional: key.ModShift},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
-			if pop.focused >= 0 {
+			if pop.focused >= 0 && len(pop.labels) > 0 {
 				// simulate a click
 				pop.labels[pop.focused].Click()
 			}
@@ -157,7 +156,7 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 	// press Tab to confirm
 	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameTab, Optional: key.ModShift},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
-			if pop.focused >= 0 {
+			if pop.focused >= 0 && len(pop.labels) > 0 {
 				// simulate a click
 				pop.labels[pop.focused].Click()
 			}
@@ -173,10 +172,6 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 		},
 	)
 
-	if pop.focused < len(pop.labels) {
-		pop.labels[pop.focused].selected = true
-	}
-
 	if len(pop.labels) < pop.itemsCount {
 		for i := len(pop.labels); i < pop.itemsCount; i++ {
 			pop.labels = append(pop.labels, &itemLabel{onClicked: func() {
@@ -187,6 +182,11 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 		}
 	} else {
 		pop.labels = pop.labels[:pop.itemsCount]
+	}
+
+	if len(pop.labels) > 0 {
+		pop.focused = min(pop.focused, len(pop.labels)-1)
+		pop.labels[pop.focused].selected = true
 	}
 
 }

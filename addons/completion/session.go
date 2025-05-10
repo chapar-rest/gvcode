@@ -55,10 +55,12 @@ func (s *session) Update(ctx gvcode.CompletionContext) {
 		return
 	}
 
-	tr := s.state.completor.Trigger()
-	if !slices.Contains(tr.Characters, ctx.Input) && !isSymbolChar([]rune(ctx.Input)[0]) {
-		s.makeInvalid()
-		return
+	if ctx.Input != "" {
+		tr := s.state.completor.Trigger()
+		if !slices.Contains(tr.Characters, ctx.Input) && !isSymbolChar([]rune(ctx.Input)[0]) {
+			s.makeInvalid()
+			return
+		}
 	}
 
 	s.ctx = ctx
