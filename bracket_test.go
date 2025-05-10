@@ -59,6 +59,14 @@ func TestNearestMatchingBrackets(t *testing.T) {
 			setup: setup("{a[b]cde}", 6),
 			want:  []int{0, 8},
 		},
+		{
+			setup: setup("{ab)c}", 3),
+			want:  []int{-1, 3},
+		},
+		{
+			setup: setup("{ab(c}", 3),
+			want:  []int{3, -1},
+		},
 	}
 
 	for i, tc := range cases {
