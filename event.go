@@ -347,7 +347,7 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 		// auto-insert the closing part.
 		e.replace(ke.Range.Start, ke.Range.End, ke.Text+string(counterpart))
 		e.text.MoveCaret(-1, -1)
-		start, _ := e.text.Selection()
+		start, _ := e.text.Selection() // start and end should be the same
 		e.autoInsertions[start] = counterpart
 
 	} else if counterpart > 0 {

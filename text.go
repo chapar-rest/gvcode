@@ -405,15 +405,17 @@ func (e *textView) MovePages(pages int, selAct selectionAction) {
 
 // moveByGraphemes returns the rune index resulting from moving the
 // specified number of grapheme clusters from startRuneidx.
-func (e *textView) moveByGraphemes(startRuneidx, graphemes int) int {
+func (e *textView) moveByGraphemes(startRuneIdx, graphemes int) int {
 	if len(e.layouter.Graphemes) == 0 {
-		return startRuneidx
+		return startRuneIdx
 	}
-	startGraphemeIdx, _ := slices.BinarySearch(e.layouter.Graphemes, startRuneidx)
+
+	startGraphemeIdx, _ := slices.BinarySearch(e.layouter.Graphemes, startRuneIdx)
 	startGraphemeIdx = max(startGraphemeIdx+graphemes, 0)
 	startGraphemeIdx = min(startGraphemeIdx, len(e.layouter.Graphemes)-1)
-	startRuneIdx := e.layouter.Graphemes[startGraphemeIdx]
-	return e.closestToRune(startRuneIdx).Runes
+	startRuneIdx = e.layouter.Graphemes[startGraphemeIdx]
+	s := e.closestToRune(startRuneIdx).Runes
+	return s
 }
 
 // clampCursorToGraphemes ensures that the final start/end positions of
@@ -428,6 +430,10 @@ func (e *textView) clampCursorToGraphemes() {
 // negative distances moves backward. Distances are in grapheme clusters which
 // better match the expectations of users than runes.
 func (e *textView) MoveCaret(startDelta, endDelta int) {
+	// Fix Bug: when there is an editing at the end of the text, two successive calls to
+	// moveByGraphemes return different result, resulting a different start and end of
+	// the selection. We have to do layout earlier to fix this issue.
+	e.makeValid()
 	e.caret.xoff = 0
 	e.caret.start = e.moveByGraphemes(e.caret.start, startDelta)
 	e.caret.end = e.moveByGraphemes(e.caret.end, endDelta)
