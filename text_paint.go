@@ -32,33 +32,21 @@ func (e *textView) layoutText(shaper *text.Shaper) {
 // PaintText clips and paints the visible text glyph outlines using the provided
 // material to fill the glyphs.
 func (e *textView) PaintText(gtx layout.Context, material op.CallOp, textStyles []*TextStyle) {
-	m := op.Record(gtx.Ops)
 	viewport := image.Rectangle{
 		Min: e.scrollOff,
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
+	e.textPainter.UpdateViewport(viewport, e.scrollOff)
+	e.textPainter.UpdateSyntaxTokens(nil)
+
 	tp := textPainter{
-		viewport: viewport,
-		styles:   textStyles,
+		viewport:  viewport,
+		scrollOff: e.scrollOff,
+		styles:    textStyles,
 	}
 
-	for _, line := range e.layouter.Lines {
-		if line.Descent.Ceil()+line.YOff < viewport.Min.Y {
-			continue
-		}
-		if line.YOff-line.Ascent.Floor() > viewport.Max.Y {
-			break
-		}
-
-		tp.paintLine(gtx, e.shaper, line, material)
-	}
-
-	call := m.Stop()
-	viewport.Min = viewport.Min.Add(tp.padding.Min)
-	viewport.Max = viewport.Max.Add(tp.padding.Max)
-	defer clip.Rect(viewport.Sub(e.scrollOff)).Push(gtx.Ops).Pop()
-	call.Add(gtx.Ops)
+	tp.PaintText(gtx, e.shaper, e.layouter.Lines, material)
 }
 
 // PaintSelection clips and paints the visible text selection rectangles using
