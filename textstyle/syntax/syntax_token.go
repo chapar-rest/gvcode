@@ -4,19 +4,21 @@ import (
 	"sort"
 
 	"gioui.org/op"
+	"github.com/oligo/gvcode/internal/layout"
+	"github.com/oligo/gvcode/internal/painter"
 )
 
 type Token struct {
 	// offset of the start rune in the document.
-	Start int
-	// offset of the end rune in the document.
-	End   int
-	Style TokenStyle
+	Start, End int
+	// Token type registered in the color scheme.
+	TokenType string
 }
 
 type TextTokens struct {
-	tokens      []Token
+	tokens      []TokenStyle
 	colorScheme *ColorScheme
+	splitter    lineSplitter
 }
 
 func NewTextTokens(scheme *ColorScheme) *TextTokens {
@@ -30,9 +32,18 @@ func (t *TextTokens) Clear() {
 	t.tokens = t.tokens[:0]
 }
 
-func (t *TextTokens) Add(tokenType string, start, end int) {
+// Set adds all the tokens, replacing the existing ones.
+// Caller should insures the tokens are sorted by the range in ascending order .
+func (t *TextTokens) Set(tokens ...Token) {
+	t.Clear()
+	for _, token := range tokens {
+		t.add(token.TokenType, token.Start, token.End)
+	}
+}
+
+func (t *TextTokens) add(tokenType string, start, end int) {
 	style := t.colorScheme.GetTokenStyle(tokenType)
-	t.tokens = append(t.tokens, Token{
+	t.tokens = append(t.tokens, TokenStyle{
 		Start: start,
 		End:   end,
 		Style: style,
@@ -47,7 +58,7 @@ func (t *TextTokens) GetColor(colorID int) op.CallOp {
 // Query tokens for rune range. start and end are in runes. start is inclusive
 // and end is exclusive. This method assumes the tokens are sorted by start or end
 // in ascending order.
-func (t *TextTokens) QueryRange(start, end int) []Token {
+func (t *TextTokens) QueryRange(start, end int) []TokenStyle {
 	if len(t.tokens) == 0 || start >= end {
 		return nil
 	}
@@ -63,7 +74,7 @@ func (t *TextTokens) QueryRange(start, end int) []Token {
 		return nil
 	}
 
-	var result []Token
+	var result []TokenStyle
 	for i := firstIdx; i < len(t.tokens); i++ {
 		token := t.tokens[i]
 		if token.Start < end {
@@ -75,4 +86,9 @@ func (t *TextTokens) QueryRange(start, end int) []Token {
 		}
 	}
 	return result
+}
+
+// Split implements painter.LineSplitter
+func (t *TextTokens) Split(line *layout.Line, runs *[]painter.RenderRun) {
+	t.splitter.Split(line, t, runs)
 }

@@ -7,19 +7,6 @@ import (
 	"github.com/rdleal/intervalst/interval"
 )
 
-// TextRange contains the range of text of interest in the document. It can used for
-// search, styling text, or any other purposes.
-// type TextRange struct {
-// 	// offset of the start rune in the document.
-// 	Start int
-// 	// offset of the end rune in the document.
-// 	End int
-// }
-
-// func (rng TextRange) Overlap(other TextRange) bool {
-// 	return rng.Start <= other.End && rng.End >= other.Start
-// }
-
 // DecorationTree leverages a interval tree to stores overlapping decorations.
 type DecorationTree struct {
 	tree *interval.MultiValueSearchTree[Decoration, int]
