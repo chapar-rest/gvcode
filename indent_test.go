@@ -3,51 +3,224 @@ package gvcode
 import (
 	"fmt"
 	"testing"
+
+	"gioui.org/layout"
+	"gioui.org/text"
+	"gioui.org/unit"
+	"github.com/oligo/gvcode/internal/buffer"
 )
 
-func TestDedentLine(t *testing.T) {
-	indenter := autoIndenter{Editor: &Editor{}}
-	indenter.Editor.WithOptions(WithTabWidth(4))
+func TestIndentLines(t *testing.T) {
+	setup := func(input string, selection []int) *textView {
+		vw := &textView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
+		vw.SetSource(buffer.NewTextSource())
+		vw.SetText(input)
 
-	cases := []struct{
-		input string
-		want string
+		gtx := layout.Context{}
+		shaper := text.NewShaper()
+		vw.Layout(gtx, shaper)
+
+		vw.SetCaret(selection[0], selection[1])
+		return vw
+	}
+
+	cases := []struct {
+		input     string
+		selection []int
+		backward  bool
+		want      string
+		wantMoves int
 	}{
 		{
-			input: "abc",
-			want: "abc",
+			input:     "abc",
+			selection: []int{1, 1},
+			backward:  false,
+			want:      "a\tbc",
+			wantMoves: 1,
 		},
 		{
-			input: "\t\tabc",
-			want: "\tabc",
-		},
-
-		{
-			input: "\t    abc",
-			want: "\tabc",
-		},
-
-		{
-			input: "\t      abc",
-			want: "\t    abc",
+			input:     "abc",
+			selection: []int{1, 1},
+			backward:  true,
+			want:      "abc",
+			wantMoves: 0,
 		},
 		{
-			input: "    abc",
-			want: "abc",
+			input:     "abc",
+			selection: []int{1, 2},
+			backward:  false,
+			want:      "a\tc",
+			wantMoves: 1,
+		},
+		// multiple lines
+		{
+			input:     "\tabc\n\tdef",
+			selection: []int{0, 9},
+			backward:  false,
+			want:      "\t\tabc\n\t\tdef",
+			wantMoves: 11,
 		},
 		{
-			input: "   abc",
-			want: "abc",
+			input:     "\tabc\n\tdef",
+			selection: []int{0, 9},
+			backward:  true,
+			want:      "abc\ndef",
+			wantMoves: 7,
+		},
+		{
+			input:     "abc\n\tdef",
+			selection: []int{0, 8},
+			backward:  true,
+			want:      "abc\ndef",
+			wantMoves: 7,
+		},
+		{
+			input:     "  abc\n\tdef",
+			selection: []int{0, 10},
+			backward:  true,
+			want:      "abc\ndef",
+			wantMoves: 7,
+		},
+		{
+			input:     "  abc\n\tdef",
+			selection: []int{0, 10},
+			backward:  false,
+			want:      "\t  abc\n\t\tdef",
+			wantMoves: 12,
 		},
 	}
 
 	for i, tc := range cases {
-		t.Run(fmt.Sprintf("%d: %s", i, tc.input,), func(t *testing.T) {
-			actual := indenter.dedentLine(tc.input)
+		t.Run(fmt.Sprintf("%d: %s", i, tc.input), func(t *testing.T) {
+			text := setup(tc.input, tc.selection)
+			actual := text.IndentLines(tc.backward)
+			finalContent := text.src.Text(nil)
+			if actual != tc.wantMoves || string(finalContent) != tc.want {
+				t.Logf("want content: %q, actual content: %q, want moves: %d, actual moves: %d", tc.want, string(finalContent), tc.wantMoves, actual)
+				t.Fail()
+			}
+		})
+	}
+
+}
+
+func TestDedentLine(t *testing.T) {
+	text := &textView{}
+	text.SetSource(buffer.NewTextSource())
+	text.TabWidth = 4
+
+	cases := []struct {
+		input string
+		want  string
+	}{
+		{
+			input: "abc",
+			want:  "abc",
+		},
+		{
+			input: "\t\tabc",
+			want:  "\tabc",
+		},
+
+		{
+			input: "\t    abc",
+			want:  "\tabc",
+		},
+
+		{
+			input: "\t      abc",
+			want:  "\t    abc",
+		},
+		{
+			input: "    abc",
+			want:  "abc",
+		},
+		{
+			input: "   abc",
+			want:  "abc",
+		},
+	}
+
+	for i, tc := range cases {
+		t.Run(fmt.Sprintf("%d: %s", i, tc.input), func(t *testing.T) {
+			actual := text.dedentLine(tc.input)
 			if actual != tc.want {
 				t.Fail()
 			}
 		})
-	} 
+	}
+
+}
+
+func TestIndentOnBreak(t *testing.T) {
+	setup := func(input string, selection int) *textView {
+		vw := &textView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
+		vw.SetSource(buffer.NewTextSource())
+		vw.SetText(input)
+
+		gtx := layout.Context{}
+		shaper := text.NewShaper()
+		vw.Layout(gtx, shaper)
+
+		vw.SetCaret(selection, selection)
+		return vw
+	}
+
+	cases := []struct {
+		input     string
+		selection int
+		want      string
+		wantMoves int
+	}{
+		{
+			input:     "abc",
+			selection: 3,
+			want:      "abc\n",
+			wantMoves: 1,
+		},
+		{
+			input:     "\tabcde",
+			selection: 4,
+			want:      "\tabc\n\tde",
+			wantMoves: 2,
+		},
+		{
+			input:     "abc{\n}",
+			selection: 4,
+			want:      "abc{\n\t\n}",
+			wantMoves: 2,
+		},
+
+		{
+			input:     "abc{de\n}",
+			selection: 6,
+			want:      "abc{de\n\t\n}",
+			wantMoves: 2,
+		},
+		{
+			input:     "abc{}",
+			selection: 4,
+			want:      "abc{\n\t\n}",
+			wantMoves: 3,
+		},
+		{
+			input:     "\tabc{\n\n}",
+			selection: 6,
+			want:      "\tabc{\n\n\n}",
+			wantMoves: 1,
+		},
+	}
+
+	for i, tc := range cases {
+		t.Run(fmt.Sprintf("%d: %s", i, tc.input), func(t *testing.T) {
+			text := setup(tc.input, tc.selection)
+			actual := text.IndentOnBreak("\n")
+			finalContent := text.src.Text(nil)
+			if actual != tc.wantMoves || string(finalContent) != tc.want {
+				t.Logf("want content: %q, actual content: %q, want moves: %d, actual moves: %d", tc.want, string(finalContent), tc.wantMoves, actual)
+				t.Fail()
+			}
+		})
+	}
 
 }

@@ -88,12 +88,8 @@ type textView struct {
 	// WordSeperators configures a set of characters that will be used as word separators
 	// when doing word related operations, like navigating or deleting by word.
 	WordSeperators string
-	// A set of quote pairs that can be auto-completed when the left  half is entered.
-	QuotePairs map[rune]rune
-	// A set of bracket pairs that can be auto-completed when the left half is entered.
-	BracketPairs map[rune]rune
-
-	bracketHandler bracketHandler
+	// Brackets and quote pairs that can be auto-completed when the left half is entered.
+	BracketsQuotes *bracketsQuotes
 
 	src    buffer.TextSource
 	params text.Parameters
@@ -113,6 +109,8 @@ type textView struct {
 	// caret position in the view.
 	caret   caretPos
 	regions []Region
+	// line buffer for line related operations.
+	lineBuf []byte
 }
 
 // SetSource initializes the underlying data source for the Text. This
@@ -120,9 +118,7 @@ type textView struct {
 func (e *textView) SetSource(source buffer.TextSource) {
 	e.src = source
 	e.layouter = lt.NewTextLayout(e.src)
-	e.bracketHandler.textView = e
-	e.QuotePairs = builtinQuotePairs
-	e.BracketPairs = builtinBracketPairs
+	e.BracketsQuotes = &bracketsQuotes{}
 	e.invalidate()
 }
 
@@ -280,10 +276,15 @@ func (tv *textView) calcLineHeight() fixed.Int26_6 {
 }
 
 // ByteOffset returns the start byte of the rune at the given
-// rune offset, clamped to the size of the text.
+// rune offset.
 func (e *textView) ByteOffset(runeOffset int) int64 {
-	pos := e.closestToRune(runeOffset)
-	return int64(e.src.RuneOffset(pos.Runes))
+	return int64(e.src.RuneOffset(runeOffset))
+}
+
+// ReadRuneAt reads a rune at the rune offset runeOff. It returns an error
+// while reading from the underlying buffer.
+func (e *textView) ReadRuneAt(runeOff int) (rune, error) {
+	return e.src.ReadRuneAt(runeOff)
 }
 
 // Len is the length of the editor contents, in runes.
@@ -404,15 +405,17 @@ func (e *textView) MovePages(pages int, selAct selectionAction) {
 
 // moveByGraphemes returns the rune index resulting from moving the
 // specified number of grapheme clusters from startRuneidx.
-func (e *textView) moveByGraphemes(startRuneidx, graphemes int) int {
+func (e *textView) moveByGraphemes(startRuneIdx, graphemes int) int {
 	if len(e.layouter.Graphemes) == 0 {
-		return startRuneidx
+		return startRuneIdx
 	}
-	startGraphemeIdx, _ := slices.BinarySearch(e.layouter.Graphemes, startRuneidx)
+
+	startGraphemeIdx, _ := slices.BinarySearch(e.layouter.Graphemes, startRuneIdx)
 	startGraphemeIdx = max(startGraphemeIdx+graphemes, 0)
 	startGraphemeIdx = min(startGraphemeIdx, len(e.layouter.Graphemes)-1)
-	startRuneIdx := e.layouter.Graphemes[startGraphemeIdx]
-	return e.closestToRune(startRuneIdx).Runes
+	startRuneIdx = e.layouter.Graphemes[startGraphemeIdx]
+	s := e.closestToRune(startRuneIdx).Runes
+	return s
 }
 
 // clampCursorToGraphemes ensures that the final start/end positions of
@@ -427,6 +430,10 @@ func (e *textView) clampCursorToGraphemes() {
 // negative distances moves backward. Distances are in grapheme clusters which
 // better match the expectations of users than runes.
 func (e *textView) MoveCaret(startDelta, endDelta int) {
+	// Fix Bug: when there is an editing at the end of the text, two successive calls to
+	// moveByGraphemes return different result, resulting a different start and end of
+	// the selection. We have to do layout earlier to fix this issue.
+	e.makeValid()
 	e.caret.xoff = 0
 	e.caret.start = e.moveByGraphemes(e.caret.start, startDelta)
 	e.caret.end = e.moveByGraphemes(e.caret.end, endDelta)

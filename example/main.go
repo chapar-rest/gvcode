@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"image"
 	"image/color"
 	"log"
 	"os"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"gioui.org/app"
 	"gioui.org/font"
@@ -33,7 +33,6 @@ type EditorApp struct {
 	window *app.Window
 	th     *material.Theme
 	state  *gvcode.Editor
-	popup  completion.CompletionPopup
 }
 
 const (
@@ -155,26 +154,16 @@ func main() {
 
 	// Setting up auto-completion.
 	cm := &completion.DefaultCompletion{Editor: editorApp.state}
-	// set completion triggers
-	cm.SetTriggers(
-		gvcode.AutoTrigger{},
-		gvcode.KeyTrigger{Name: "P", Modifiers: key.ModShortcut})
-	// set the completion algorithms
-	cm.SetCompletors(&goCompletor{})
-	// set popup widget to let user navigate the candidates.
-	editorApp.popup = *completion.NewCompletionPopup(editorApp.state, cm)
-	cm.SetPopup(func(gtx layout.Context, items []gvcode.CompletionCandidate) layout.Dimensions {
-		editorApp.popup.TextSize = unit.Sp(12)
-		editorApp.popup.Size = image.Point{
-			X: gtx.Dp(unit.Dp(400)),
-			Y: gtx.Dp(unit.Dp(200)),
-		}
 
-		return editorApp.popup.Layout(gtx, th, items)
-	})
+	// set popup widget to let user navigate the candidates.
+	popup := completion.NewCompletionPopup(editorApp.state, cm)
+	popup.Theme = th
+	popup.TextSize = unit.Sp(12)
+
+	cm.AddCompletor(&goCompletor{editor: editorApp.state}, popup)
 
 	editorApp.state.WithOptions(
-		gvcode.WithSoftTab(true),
+		// gvcode.WithSoftTab(true),
 		gvcode.WithQuotePairs(quotePairs),
 		gvcode.WithBracketPairs(bracketPairs),
 		gvcode.WithAutoCompletion(cm),
@@ -234,15 +223,46 @@ var golangKeywords = []string{
 }
 
 type goCompletor struct {
+	editor *gvcode.Editor
+}
+
+func isSymbolSeperator(ch rune) bool {
+	if (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_' {
+		return false
+	}
+
+	return true
+}
+
+func (c *goCompletor) Trigger() gvcode.Trigger {
+	return gvcode.Trigger{
+		Characters: []string{"."},
+		KeyBinding: struct {
+			Name      key.Name
+			Modifiers key.Modifiers
+		}{
+			Name: "P", Modifiers: key.ModShortcut,
+		},
+	}
 }
 
 func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
+	prefix := c.editor.ReadUntil(-1, isSymbolSeperator)
 	candicates := make([]gvcode.CompletionCandidate, 0)
 	for _, kw := range golangKeywords {
-		if strings.Contains(kw, ctx.Input) {
+		if strings.Contains(kw, prefix) {
 			candicates = append(candicates, gvcode.CompletionCandidate{
-				Label:       kw,
-				InsertText:  kw,
+				Label: kw,
+				TextEdit: gvcode.TextEdit{
+					NewText: kw,
+					EditRange: gvcode.EditRange{
+						Start: gvcode.Position{Runes: ctx.Position.Runes - utf8.RuneCountInString(prefix)},
+						End:   gvcode.Position{Runes: ctx.Position.Runes},
+					},
+				},
 				Description: kw,
 				Kind:        "text",
 			})
