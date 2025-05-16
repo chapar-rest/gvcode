@@ -8,32 +8,14 @@ import (
 	"gioui.org/f32"
 	"gioui.org/font"
 	"gioui.org/layout"
-	"gioui.org/op"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"github.com/oligo/gvcode/internal/buffer"
 	lt "github.com/oligo/gvcode/internal/layout"
+	"github.com/oligo/gvcode/internal/painter"
 	"golang.org/x/exp/slices"
 	"golang.org/x/image/math/fixed"
 )
-
-// TextRange contains the range of text of interest in the document. It can used for
-// search, styling text, or any other purposes.
-type TextRange struct {
-	// offset of the start rune in the document.
-	Start int
-	// offset of the end rune in the document.
-	End int
-}
-
-// TextStyle defines style for a range of text in the document.
-type TextStyle struct {
-	TextRange
-	// Color of the text..
-	Color op.CallOp
-	// Background color of the painted text in the range.
-	Background op.CallOp
-}
 
 // Region describes the position and baseline of an area of interest within
 // shaped text.
@@ -101,8 +83,9 @@ type textView struct {
 	// line height used by shaper.
 	lineHeight fixed.Int26_6
 	// scrolled offset relative to the start of dims.
-	scrollOff image.Point
-	layouter  lt.TextLayout
+	scrollOff   image.Point
+	layouter    lt.TextLayout
+	textPainter painter.TextPainter
 
 	// The layout is valid or not. Invalid layout requires a re-layout.
 	valid bool

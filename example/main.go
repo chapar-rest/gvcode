@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"log"
 	"os"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -67,8 +66,8 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 
 		switch evt.(type) {
 		case gvcode.ChangeEvent:
-			styles := HightlightTextByPattern(ed.state.Text(), syntaxPattern)
-			ed.state.UpdateTextStyles(styles)
+			//styles := HightlightTextByPattern(ed.state.Text(), syntaxPattern)
+			//ed.state.UpdateTextStyles(styles)
 		}
 	}
 
@@ -149,8 +148,8 @@ func main() {
 	thisFile, _ := os.ReadFile("./main.go")
 	editorApp.state.SetText(string(thisFile))
 	// editorApp.state.SetHighlights([]editor.TextRange{{Start: 0, End: 5}})
-	styles := HightlightTextByPattern(editorApp.state.Text(), syntaxPattern)
-	editorApp.state.UpdateTextStyles(styles)
+	//styles := HightlightTextByPattern(editorApp.state.Text(), syntaxPattern)
+	//editorApp.state.UpdateTextStyles(styles)
 
 	// Setting up auto-completion.
 	cm := &completion.DefaultCompletion{Editor: editorApp.state}
@@ -182,24 +181,24 @@ func main() {
 
 }
 
-func HightlightTextByPattern(text string, pattern string) []*gvcode.TextStyle {
-	var styles []*gvcode.TextStyle
+// func HightlightTextByPattern(text string, pattern string) []*gvcode.TextStyle {
+// 	var styles []*gvcode.TextStyle
 
-	re := regexp.MustCompile(pattern)
-	matches := re.FindAllIndex([]byte(text), -1)
-	for _, match := range matches {
-		styles = append(styles, &gvcode.TextStyle{
-			TextRange: gvcode.TextRange{
-				Start: match[0],
-				End:   match[1],
-			},
-			Color:      rgbaToOp(color.NRGBA{R: 255, A: 255}),
-			Background: rgbaToOp(color.NRGBA{R: 215, G: 215, B: 215, A: 250}),
-		})
-	}
+// 	re := regexp.MustCompile(pattern)
+// 	matches := re.FindAllIndex([]byte(text), -1)
+// 	for _, match := range matches {
+// 		styles = append(styles, &gvcode.TextStyle{
+// 			TextRange: gvcode.TextRange{
+// 				Start: match[0],
+// 				End:   match[1],
+// 			},
+// 			Color:      rgbaToOp(color.NRGBA{R: 255, A: 255}),
+// 			Background: rgbaToOp(color.NRGBA{R: 215, G: 215, B: 215, A: 250}),
+// 		})
+// 	}
 
-	return styles
-}
+// 	return styles
+// }
 
 func rgbaToOp(textColor color.NRGBA) op.CallOp {
 	ops := new(op.Ops)

@@ -4,6 +4,7 @@ import (
 	"gioui.org/font"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"github.com/oligo/gvcode/textstyle/syntax"
 )
 
 // EditorOption defines a function to configure the editor.
@@ -101,6 +102,16 @@ func WithAutoCompletion(completor Completion) EditorOption {
 	return func(e *Editor) {
 		e.initBuffer()
 		e.completor = completor
+	}
+}
+
+// WithColorScheme configures the color scheme used for styling syntax tokens.
+// Syntax highlight implementations should align with the token types used in the
+// ColorScheme.
+func WithColorScheme(scheme syntax.ColorScheme) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.syntaxStyles = syntax.NewTextTokens(&scheme)
 	}
 }
 
