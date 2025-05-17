@@ -3,11 +3,11 @@ package syntax
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"testing"
 
 	"gioui.org/layout"
 	"gioui.org/text"
+	"github.com/oligo/gvcode/color"
 	"github.com/oligo/gvcode/internal/buffer"
 	lt "github.com/oligo/gvcode/internal/layout"
 	"github.com/oligo/gvcode/internal/painter"
@@ -31,11 +31,9 @@ func TestLineSplit(t *testing.T) {
 	doc := "Hello,world"
 
 	scheme := &ColorScheme{}
-	scheme.AddTokenType("t1", Bold|Underline, color.NRGBA{R: 200}, color.NRGBA{G: 200})
-	scheme.AddTokenType("t2", Bold, color.NRGBA{R: 200}, color.NRGBA{G: 200})
+	scheme.AddTokenType("t1", Bold|Underline, color.Color{}, color.Color{})
+	scheme.AddTokenType("t2", Bold, color.Color{}, color.Color{})
 	line := layoutText(doc)
-
-
 
 	testcases := []struct {
 		tokens   []Token

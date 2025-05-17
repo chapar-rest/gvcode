@@ -66,10 +66,15 @@ func (rb *lineSplitter) Split(line *layout.Line, textTokens *TextTokens, runs *[
 		// next read the entire token range to the current run.
 		rb.readUntil(token.End)
 		if rb.current.Size() > 0 {
-			bgId := token.Style.Background()
-			fgId := token.Style.Foreground()
-			rb.current.Fg = textTokens.GetColor(fgId)
-			rb.current.Bg = textTokens.GetColor(bgId)
+			fg := textTokens.GetColor(token.Style.Foreground())
+			bg := textTokens.GetColor(token.Style.Background())
+			if fg != nil {
+				rb.current.Fg = fg.Op(nil)
+			}
+			if bg != nil {
+				rb.current.Bg = bg.Op(nil)
+			}
+
 			textStyle := token.Style.TextStyle()
 			if textStyle.HasStyle(Underline) {
 				rb.current.Underline = &painter.UnderlineStyle{}
@@ -88,7 +93,10 @@ func (rb *lineSplitter) Split(line *layout.Line, textTokens *TextTokens, runs *[
 		}
 	}
 
+	// check if there is any glyphs left over and put them in one run.
+	rb.readUntil(line.RuneOff + line.Runes)
 	if rb.current.Size() > 0 {
+		// no style
 		rb.commitLast(runs)
 	}
 

@@ -111,6 +111,7 @@ func WithAutoCompletion(completor Completion) EditorOption {
 func WithColorScheme(scheme syntax.ColorScheme) EditorOption {
 	return func(e *Editor) {
 		e.initBuffer()
+		e.colorScheme = &scheme
 		e.syntaxStyles = syntax.NewTextTokens(&scheme)
 	}
 }

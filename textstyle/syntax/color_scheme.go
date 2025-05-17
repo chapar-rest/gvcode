@@ -1,17 +1,21 @@
 package syntax
 
 import (
-	"image/color"
 	"slices"
 
-	"github.com/oligo/gvcode/textstyle"
+	"github.com/oligo/gvcode/color"
 )
 
 // ColorScheme defines the token types and their styles used for syntax highlighting.
 type ColorScheme struct {
 	// Name is the name of the color scheme.
 	Name string
-	textstyle.ColorPalette
+	// Foreground provides a default text color for the editor.
+	Foreground color.Color
+	// Background provides a default text color for the editor.
+	Background color.Color
+
+	color.ColorPalette
 	// tokenTypes are registered token types for the color scheme.
 	// It can be mapped to captures for Tree-Sitter, and TokenType of Chroma.
 	tokenTypes []string
@@ -42,7 +46,7 @@ func (cs *ColorScheme) getTokenStyle(id int) *tokenStyleRaw {
 	}
 }
 
-func (cs *ColorScheme) AddTokenType(tokenType string, textStyle TextStyle, fg, bg color.NRGBA) {
+func (cs *ColorScheme) AddTokenType(tokenType string, textStyle TextStyle, fg, bg color.Color) {
 	tokenTypeID := cs.addTokenType(tokenType)
 	fgID := cs.AddColor(fg)
 	bgID := cs.AddColor(bg)

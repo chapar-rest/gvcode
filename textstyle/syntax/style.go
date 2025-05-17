@@ -72,10 +72,10 @@ func (t StyleMeta) String() string {
 func packTokenStyle(tokenType int, fg, bg int, textStyles TextStyle) StyleMeta {
 	s := StyleMeta(0)
 
-	s ^= StyleMeta(tokenType << tokenTypeOffset)
-	s ^= StyleMeta(fg << foregroundOffset)
-	s ^= StyleMeta(bg << backgroundOffset)
-	s ^= StyleMeta(textStyles << textStyleOffset)
+	s |= StyleMeta(tokenType << tokenTypeOffset)
+	s |= StyleMeta(fg << foregroundOffset)
+	s |= StyleMeta(bg << backgroundOffset)
+	s |= StyleMeta(textStyles << textStyleOffset)
 	return s
 }
 

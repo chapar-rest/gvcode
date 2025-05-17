@@ -3,7 +3,7 @@ package syntax
 import (
 	"sort"
 
-	"gioui.org/op"
+	"github.com/oligo/gvcode/color"
 	"github.com/oligo/gvcode/internal/layout"
 	"github.com/oligo/gvcode/internal/painter"
 )
@@ -50,9 +50,8 @@ func (t *TextTokens) add(tokenType string, start, end int) {
 	})
 }
 
-func (t *TextTokens) GetColor(colorID int) op.CallOp {
-	cl := t.colorScheme.GetColor(colorID)
-	return cl.Op()
+func (t *TextTokens) GetColor(colorID int) *color.Color {
+	return t.colorScheme.GetColor(colorID)
 }
 
 // Query tokens for rune range. start and end are in runes. start is inclusive

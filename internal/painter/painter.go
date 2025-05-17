@@ -10,6 +10,7 @@ import (
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/text"
+	"gioui.org/unit"
 	lt "github.com/oligo/gvcode/internal/layout"
 
 	"golang.org/x/image/math/fixed"
@@ -117,18 +118,21 @@ func (tp *TextPainter) paintLine(gtx layout.Context, shaper *text.Shaper, lineOf
 
 		if !noText {
 			// draw glyph
-			tp.drawText(gtx, shaper, run, defaultMaterial)
+			tp.drawText(gtx, shaper, &run, defaultMaterial)
 		}
 
 		// draw underline and other styles.
 		if run.Underline != nil {
-			tp.drawUnderline(gtx, run, defaultMaterial)
+			tp.drawUnderline(gtx, &run, defaultMaterial)
 		}
 		if run.Strikethrough != nil {
-			tp.drawStrikethrough(gtx, run, defaultMaterial)
+			tp.drawStrikethrough(gtx, &run, defaultMaterial)
 		}
 		if run.Border != nil {
-			tp.drawBorder(gtx, run, defaultMaterial)
+			tp.drawBorder(gtx, &run, defaultMaterial)
+		}
+		if run.Squiggle != nil {
+			tp.drawSquiggle(gtx, &run, defaultMaterial)
 		}
 
 		spanOffset.Pop()
@@ -136,7 +140,7 @@ func (tp *TextPainter) paintLine(gtx layout.Context, shaper *text.Shaper, lineOf
 
 }
 
-func (tp *TextPainter) drawText(gtx layout.Context, shaper *text.Shaper, run RenderRun, defaultMaterial op.CallOp) {
+func (tp *TextPainter) drawText(gtx layout.Context, shaper *text.Shaper, run *RenderRun, defaultMaterial op.CallOp) {
 	// draw glyph
 	path := shaper.Shape(run.Glyphs)
 	outline := clip.Outline{Path: path}.Op().Push(gtx.Ops)
@@ -152,9 +156,13 @@ func (tp *TextPainter) drawText(gtx layout.Context, shaper *text.Shaper, run Ren
 }
 
 func (tp *TextPainter) drawStroke(gtx layout.Context, path clip.PathSpec, material op.CallOp) {
+	if material == (op.CallOp{}) {
+		return
+	}
+
 	shape := clip.Stroke{
 		Path:  path,
-		Width: 1,
+		Width: float32(gtx.Dp(unit.Dp(1))),
 	}.Op()
 
 	defer shape.Push(gtx.Ops).Pop()
@@ -162,11 +170,13 @@ func (tp *TextPainter) drawStroke(gtx layout.Context, path clip.PathSpec, materi
 	paint.PaintOp{}.Add(gtx.Ops)
 }
 
-func (tp *TextPainter) drawUnderline(gtx layout.Context, run RenderRun, material op.CallOp) {
-	descent := run.Glyphs[0].Descent // should equals to line's descent.
+func (tp *TextPainter) drawUnderline(gtx layout.Context, run *RenderRun, material op.CallOp) {
+	descent := run.Glyphs[0].Descent
 	path := clip.Path{}
 	path.Begin(gtx.Ops)
-	path.Move(f32.Pt(fixedToFloat(run.Offset), fixedToFloat(descent)))
+	// No need to move in x axis as the outer code already set the x offset.
+	// Also we move down half the value of descent to let the line not too far from the glyph.
+	path.Move(f32.Pt(0, fixedToFloat(descent)*0.5))
 
 	width := fixedToFloat(run.Advance())
 	path.Line(f32.Point{X: width})
@@ -179,10 +189,15 @@ func (tp *TextPainter) drawUnderline(gtx layout.Context, run RenderRun, material
 	tp.drawStroke(gtx, path.End(), material)
 }
 
-func (tp *TextPainter) drawStrikethrough(gtx layout.Context, run RenderRun, material op.CallOp) {
+func (tp *TextPainter) drawStrikethrough(gtx layout.Context, run *RenderRun, material op.CallOp) {
 	path := clip.Path{}
 	path.Begin(gtx.Ops)
-	path.Move(f32.Point{X: fixedToFloat(run.Offset)})
+
+	ascent := run.Glyphs[0].Ascent
+	descent := run.Glyphs[0].Descent
+
+	deltaY := (ascent+descent)/2 - ascent
+	path.Move(f32.Point{X: 0, Y: fixedToFloat(deltaY)})
 
 	width := fixedToFloat(run.Advance())
 	path.Line(f32.Point{X: width})
@@ -195,13 +210,73 @@ func (tp *TextPainter) drawStrikethrough(gtx layout.Context, run RenderRun, mate
 	tp.drawStroke(gtx, path.End(), material)
 }
 
-func (tp *TextPainter) drawBorder(gtx layout.Context, run RenderRun, material op.CallOp) {
+func (tp *TextPainter) drawBorder(gtx layout.Context, run *RenderRun, material op.CallOp) {
 	rect := clip.Rect(run.Bounds())
 	if run.Border.Color != (op.CallOp{}) {
 		material = run.Border.Color
 	}
 
 	tp.drawStroke(gtx, rect.Path(), material)
+}
+
+// drawSquiggleQuad draw a wavy line using quadratic Bézier curve.
+//
+// Some parameters:
+//
+// startPoint: (x, y) - Where the squiggle begins.
+// endPoint: (x, y) - Where the squiggle ends.
+// amplitude: How "tall" each wave is (distance from the center line).
+// numWaves(or frequency): How many complete waves (up-down-up) you want.
+// segmentsPerWave: How many curve segments make up one complete wave. Usually 2 (one up, one down)
+// for quadratic.
+//
+// Calculate Points:
+//
+// Determine the total length of the squiggle (if horizontal, endPoint.x - startPoint.x).
+// Divide the length by the number of segments to find the segmentLength.
+// Iterate along the path, calculating control points and end points for each curve segment.
+func (tp *TextPainter) drawSquiggle(gtx layout.Context, run *RenderRun, material op.CallOp) {
+	path := clip.Path{}
+	path.Begin(gtx.Ops)
+
+	descent := run.Glyphs[0].Descent
+	// calculate a amplitude based on the descent size.
+	var amplitude fixed.Int26_6 = descent / 2
+	// set the pen relative to the dot of the start glyph.
+	startX := fixed.I(0)
+	startY := descent
+	numWaves := run.Advance() / amplitude.Mul(fixed.I(2))
+	if numWaves <= 0 {
+		return
+	}
+
+	// Each wave has 2 segments (one up, one down)
+	numSegments := numWaves * 2
+	segmentWidth := run.Advance() / numSegments
+
+	path.MoveTo(f32.Pt(fixedToFloat(startX), fixedToFloat(startY)))
+
+	currentX := startX
+	currentAmplitude := amplitude // Start with positive amplitude
+
+	for range numSegments {
+		nextX := currentX + segmentWidth
+		controlX := currentX + segmentWidth/2.0
+		controlY := startY + currentAmplitude // Control point is at the peak or trough
+
+		path.QuadTo(f32.Pt(fixedToFloat(controlX), fixedToFloat(controlY)),
+			f32.Pt(fixedToFloat(nextX), fixedToFloat(startY))) // start and end are equal.
+		currentX = nextX
+		// Alternate amplitude for next segment (up/down)
+		currentAmplitude *= -1
+	}
+
+	//path.Close()
+	if run.Squiggle.Color != (op.CallOp{}) {
+		material = run.Squiggle.Color
+	}
+
+	tp.drawStroke(gtx, path.End(), material)
 }
 
 // processGlyph checks whether the glyph is visible within the configured

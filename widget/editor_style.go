@@ -5,12 +5,11 @@ import (
 
 	"gioui.org/font"
 	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode"
+	gvcolor "github.com/oligo/gvcode/color"
 )
 
 type EditorStyle struct {
@@ -26,17 +25,17 @@ type EditorStyle struct {
 	// TextSize set the text size.
 	TextSize unit.Sp
 	// Color is the text color.
-	Color color.NRGBA
+	Color gvcolor.Color
 	// SelectionColor is the color of the background for selected text.
-	SelectionColor color.NRGBA
+	SelectionColor gvcolor.Color
 	//LineHighlightColor is the color used to highlight the clicked logical line.
 	// If not set, line will not be highlighted.
-	LineHighlightColor color.NRGBA
+	LineHighlightColor gvcolor.Color
 	// TextHighlightColor use the color used to highlight the interested substring.
-	TextHighlightColor color.NRGBA
+	TextHighlightColor gvcolor.Color
 	// Gap size between the line number bar and the main text area.
 	LineNumberGutter unit.Dp
-	LineNumberColor  color.NRGBA
+	LineNumberColor  gvcolor.Color
 
 	Editor *gvcode.Editor
 	shaper *text.Shaper
@@ -52,10 +51,10 @@ func NewEditor(th *material.Theme, editor *gvcode.Editor) EditorStyle {
 		LineHeightScale:    1.2,
 		TabWidth:           4,
 		TextSize:           th.TextSize,
-		Color:              th.Fg,
-		SelectionColor:     mulAlpha(th.ContrastBg, 0x60),
-		LineHighlightColor: mulAlpha(th.ContrastBg, 0x30),
-		LineNumberColor:    mulAlpha(th.Fg, 0xb6),
+		Color:              gvcolor.MakeColor(th.Fg),
+		SelectionColor:     gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x60),
+		LineHighlightColor: gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x30),
+		LineNumberColor:    gvcolor.MakeColor(th.Fg).MulAlpha(0xb6),
 		LineNumberGutter:   unit.Dp(24),
 	}
 
@@ -63,39 +62,17 @@ func NewEditor(th *material.Theme, editor *gvcode.Editor) EditorStyle {
 }
 
 func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
-	// Choose colors.
-	textColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: e.Color}.Add(gtx.Ops)
-	textColor := textColorMacro.Stop()
-
-	selectionColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: blendDisabledColor(!gtx.Enabled(), e.SelectionColor)}.Add(gtx.Ops)
-	selectionColor := selectionColorMacro.Stop()
-
-	lineColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: e.LineHighlightColor}.Add(gtx.Ops)
-	lineColor := lineColorMacro.Stop()
-
-	textHighlightColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: e.TextHighlightColor}.Add(gtx.Ops)
-	textHighlightColor := textHighlightColorMacro.Stop()
-
-	lineNumColorMacro := op.Record(gtx.Ops)
-	paint.ColorOp{Color: e.LineNumberColor}.Add(gtx.Ops)
-	lineNumColor := lineNumColorMacro.Stop()
-
-
 	e.Editor.WithOptions(
 		gvcode.WithShaperParams(e.Font, e.TextSize, text.Start, e.LineHeight, e.LineHeightScale),
 		gvcode.WithTabWidth(e.TabWidth),
 	)
 
 	e.Editor.LineNumberGutter = e.LineNumberGutter
-	e.Editor.TextMaterial = textColor
-	e.Editor.SelectMaterial = selectionColor
-	e.Editor.LineMaterial = lineColor
-	e.Editor.LineNumberMaterial = lineNumColor
-	e.Editor.TextHighlightMaterial = textHighlightColor
+	e.Editor.TextMaterial = e.Color
+	e.Editor.SelectMaterial = gvcolor.MakeColor(blendDisabledColor(!gtx.Enabled(), e.SelectionColor.NRGBA()))
+	e.Editor.LineMaterial = e.LineHighlightColor
+	e.Editor.LineNumberMaterial = e.LineNumberColor
+	e.Editor.TextHighlightMaterial = e.TextHighlightColor
 
 	return e.Editor.Layout(gtx, e.shaper)
 }
