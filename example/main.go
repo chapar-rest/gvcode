@@ -95,8 +95,6 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 				es.Font.Weight = font.SemiBold
 				es.TextSize = unit.Sp(14)
 				es.LineHeightScale = 1.5
-				c, _ := gvcolor.Hex2Color("#787878cc")
-				es.TextHighlightColor = c
 
 				return es.Layout(gtx)
 			})

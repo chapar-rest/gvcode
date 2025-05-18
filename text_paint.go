@@ -64,20 +64,6 @@ func (e *textView) PaintSelection(gtx layout.Context, material op.CallOp) {
 	}
 }
 
-// paintRegions clips and paints the visible text rectangles using
-// the provided material to fill the rectangles. Regions passed in should be constrained
-// in the viewport.
-func (e *textView) PaintRegions(gtx layout.Context, regions []Region, material op.CallOp) {
-	localViewport := image.Rectangle{Max: e.viewSize}
-	defer clip.Rect(localViewport).Push(gtx.Ops).Pop()
-	for _, region := range regions {
-		area := clip.Rect(e.adjustPadding(region.Bounds)).Push(gtx.Ops)
-		material.Add(gtx.Ops)
-		paint.PaintOp{}.Add(gtx.Ops)
-		area.Pop()
-	}
-}
-
 func (e *textView) PaintOverlay(gtx layout.Context, offset image.Point, overlay layout.Widget) {
 	viewport := image.Rectangle{
 		Min: e.scrollOff,

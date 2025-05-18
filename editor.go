@@ -37,8 +37,6 @@ type Editor struct {
 	LineMaterial color.Color
 	// Color used to paint the line number
 	LineNumberMaterial color.Color
-	// Color used to highlight the text snippets, such as search matches.
-	TextHighlightMaterial color.Color
 
 	// hooks
 	onPaste   BeforePasteHook
@@ -62,15 +60,9 @@ type Editor struct {
 	// errors, lint warnings, and search highlights.
 	decorations *decoration.DecorationTree
 
-	// highlights specifies the text to be highlighted using text ranges.
-	highlights []TextRange
-
 	// scratch is a byte buffer that is reused to efficiently read portions of text
 	// from the textView.
-	scratch []byte
-	// regions is a region buffer.
-	regions []Region
-
+	scratch    []byte
 	blinkStart time.Time
 
 	// ime tracks the state relevant to input methods.
@@ -243,7 +235,6 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 	if e.Len() > 0 {
 		e.paintSelection(gtx, e.SelectMaterial)
 		e.paintLineHighlight(gtx, e.LineMaterial)
-		e.paintTextRanges(gtx, e.TextHighlightMaterial)
 		e.text.highlightMatchingBrackets(gtx, e.SelectMaterial.Op(gtx.Ops))
 
 		textMaterial := e.TextMaterial
@@ -285,27 +276,6 @@ func (e *Editor) paintCaret(gtx layout.Context, material color.Color) {
 func (e *Editor) paintLineHighlight(gtx layout.Context, material color.Color) {
 	e.initBuffer()
 	e.text.paintLineHighlight(gtx, material.Op(gtx.Ops))
-}
-
-// SetHighlights sets the texts to be highlighted.
-func (e *Editor) SetHighlights(highlights []TextRange) {
-	e.highlights = highlights
-	e.ClearSelection()
-}
-
-func (e *Editor) paintTextRanges(gtx layout.Context, material color.Color) {
-	e.initBuffer()
-
-	e.regions = e.regions[:0]
-	rg := make([]Region, 0)
-	for _, txt := range e.highlights {
-		rg = rg[:0]
-		e.regions = append(e.regions, e.text.Regions(txt.Start, txt.End, rg)...)
-	}
-
-	if len(e.regions) > 0 {
-		e.text.PaintRegions(gtx, e.regions, material.Op(gtx.Ops))
-	}
 }
 
 // Len is the length of the editor contents, in runes.

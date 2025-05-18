@@ -31,8 +31,6 @@ type EditorStyle struct {
 	//LineHighlightColor is the color used to highlight the clicked logical line.
 	// If not set, line will not be highlighted.
 	LineHighlightColor gvcolor.Color
-	// TextHighlightColor use the color used to highlight the interested substring.
-	TextHighlightColor gvcolor.Color
 	// Gap size between the line number bar and the main text area.
 	LineNumberGutter unit.Dp
 	LineNumberColor  gvcolor.Color
@@ -72,7 +70,6 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 	e.Editor.SelectMaterial = gvcolor.MakeColor(blendDisabledColor(!gtx.Enabled(), e.SelectionColor.NRGBA()))
 	e.Editor.LineMaterial = e.LineHighlightColor
 	e.Editor.LineNumberMaterial = e.LineNumberColor
-	e.Editor.TextHighlightMaterial = e.TextHighlightColor
 
 	return e.Editor.Layout(gtx, e.shaper)
 }
