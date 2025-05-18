@@ -175,8 +175,7 @@ func (tp *TextPainter) drawUnderline(gtx layout.Context, run *RenderRun, materia
 	path := clip.Path{}
 	path.Begin(gtx.Ops)
 	// No need to move in x axis as the outer code already set the x offset.
-	// Also we move down half the value of descent to let the line not too far from the glyph.
-	path.Move(f32.Pt(0, fixedToFloat(descent)*0.5))
+	path.Move(f32.Pt(0, fixedToFloat(descent)))
 
 	width := fixedToFloat(run.Advance())
 	path.Line(f32.Point{X: width})
@@ -247,6 +246,7 @@ func (tp *TextPainter) drawSquiggle(gtx layout.Context, run *RenderRun, material
 	startY := descent
 	numWaves := run.Advance() / amplitude.Mul(fixed.I(2))
 	if numWaves <= 0 {
+		path.End() // pop the macro from the stack.
 		return
 	}
 
