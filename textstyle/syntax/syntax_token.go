@@ -43,6 +43,10 @@ func (t *TextTokens) Set(tokens ...Token) {
 
 func (t *TextTokens) add(tokenType string, start, end int) {
 	style := t.colorScheme.GetTokenStyle(tokenType)
+	if style == 0 {
+		return
+	}
+
 	t.tokens = append(t.tokens, TokenStyle{
 		Start: start,
 		End:   end,

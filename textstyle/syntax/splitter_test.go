@@ -58,6 +58,12 @@ func TestLineSplit(t *testing.T) {
 			wantSize: 2,
 			wantLen:  []int{5, 6},
 		},
+		// unstyled leading and trailing text.
+		{
+			tokens:   []Token{{TokenType: "t1", Start: 2, End: 5}},
+			wantSize: 3,
+			wantLen:  []int{2, 3, 6},
+		},
 	}
 
 	for i, tc := range testcases {

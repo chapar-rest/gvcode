@@ -66,14 +66,20 @@ func (rb *lineSplitter) Split(line *layout.Line, textTokens *TextTokens, runs *[
 		// next read the entire token range to the current run.
 		rb.readUntil(token.End)
 		if rb.current.Size() > 0 {
+			if token.Style == 0 {
+				continue
+			}
+
 			fg := textTokens.GetColor(token.Style.Foreground())
 			bg := textTokens.GetColor(token.Style.Background())
-			if fg != nil {
+			if fg != nil && fg.IsSet() {
 				rb.current.Fg = fg.Op(nil)
 			}
-			if bg != nil {
+			if bg != nil && bg.IsSet() {
 				rb.current.Bg = bg.Op(nil)
 			}
+
+			//log.Println("run fg and bg: ", fg.NRGBA(), bg.NRGBA(), token.Style.Foreground(), token.Style.Background())
 
 			textStyle := token.Style.TextStyle()
 			if textStyle.HasStyle(Underline) {

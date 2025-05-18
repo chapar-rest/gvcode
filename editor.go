@@ -14,6 +14,7 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
+	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"github.com/oligo/gvcode/color"
@@ -188,6 +189,7 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 	e.scroller.Add(gtx.Ops)
 	if e.colorScheme != nil && e.colorScheme.Background.IsSet() {
 		e.colorScheme.Background.Op(nil).Add(gtx.Ops)
+		paint.PaintOp{}.Add(gtx.Ops)
 	}
 
 	return layout.Flex{

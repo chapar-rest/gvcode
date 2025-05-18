@@ -84,3 +84,7 @@ func (cs *ColorScheme) GetTokenStyle(tokenType string) StyleMeta {
 
 	return packTokenStyle(idx, style.fg, style.bg, style.textStyle)
 }
+
+func (cs *ColorScheme) TokenTypes() []string {
+	return cs.tokenTypes
+}
