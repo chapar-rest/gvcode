@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	_ "net/http/pprof" // This line registers the pprof handlers
 	"os"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -13,13 +15,14 @@ import (
 	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op"
-	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
-	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode"
 	"github.com/oligo/gvcode/addons/completion"
+	gvcolor "github.com/oligo/gvcode/color"
+	"github.com/oligo/gvcode/textstyle/decoration"
+	"github.com/oligo/gvcode/textstyle/syntax"
 	wg "github.com/oligo/gvcode/widget"
 )
 
@@ -49,9 +52,7 @@ func (ed *EditorApp) run() error {
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
-			layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx C) D {
-				return ed.layout(gtx, ed.th)
-			})
+			ed.layout(gtx, ed.th)
 			e.Frame(gtx.Ops)
 		}
 	}
@@ -66,8 +67,8 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 
 		switch evt.(type) {
 		case gvcode.ChangeEvent:
-			//styles := HightlightTextByPattern(ed.state.Text(), syntaxPattern)
-			//ed.state.UpdateTextStyles(styles)
+			tokens := HightlightTextByPattern(ed.state.Text(), syntaxPattern)
+			ed.state.SetSyntaxTokens(tokens...)
 		}
 	}
 
@@ -83,24 +84,21 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 		layout.Flexed(1, func(gtx C) D {
 			borderColor := th.Fg
 			borderColor.A = 0xb6
-			return widget.Border{
-				Color: borderColor, Width: unit.Dp(1),
-			}.Layout(gtx, func(gtx C) D {
-				return layout.Inset{
-					Top:    unit.Dp(6),
-					Bottom: unit.Dp(6),
-					Left:   unit.Dp(24),
-					Right:  unit.Dp(24),
-				}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					es := wg.NewEditor(th, ed.state)
-					es.Font.Typeface = "monospace"
-					es.Font.Weight = font.SemiBold
-					es.TextSize = unit.Sp(12)
-					es.LineHeightScale = 1.5
-					es.TextHighlightColor = color.NRGBA{R: 120, G: 120, B: 120, A: 200}
+			return layout.Inset{
+				Top:    unit.Dp(6),
+				Bottom: unit.Dp(6),
+				Left:   unit.Dp(6),
+				Right:  unit.Dp(6),
+			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				es := wg.NewEditor(th, ed.state)
+				es.Font.Typeface = "monospace"
+				es.Font.Weight = font.SemiBold
+				es.TextSize = unit.Sp(14)
+				es.LineHeightScale = 1.5
+				c, _ := gvcolor.Hex2Color("#787878cc")
+				es.TextHighlightColor = c
 
-					return es.Layout(gtx)
-				})
+				return es.Layout(gtx)
 			})
 		}),
 		layout.Rigid(func(gtx C) D {
@@ -117,39 +115,20 @@ func main() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 	th := material.NewTheme()
 	th.ContrastBg = color.NRGBA{R: 40, G: 204, B: 187, A: 255}
+	//th.Bg = color.NRGBA{R: 32, G: 26, B: 16, A: 255}
+	//th.Fg = color.NRGBA{R: 255, G: 255, B: 250, A: 255}
 
 	editorApp := EditorApp{
 		window: &app.Window{},
 		th:     th,
 	}
-	editorApp.window.Option(app.Title("Basic Example"))
+	editorApp.window.Option(app.Title("gvcode feature demo"))
 
 	gvcode.SetDebug(false)
 	editorApp.state = &gvcode.Editor{}
-	editorApp.state.WithOptions(
-		gvcode.WrapLine(true),
-	)
-
-	var quotePairs = map[rune]rune{
-		'\'': '\'',
-		'"':  '"',
-		'`':  '`',
-		'“':  '”',
-	}
-
-	// Bracket pairs
-	var bracketPairs = map[rune]rune{
-		'(': ')',
-		'{': '}',
-		'[': ']',
-		'<': '>',
-	}
 
 	thisFile, _ := os.ReadFile("./main.go")
 	editorApp.state.SetText(string(thisFile))
-	// editorApp.state.SetHighlights([]editor.TextRange{{Start: 0, End: 5}})
-	//styles := HightlightTextByPattern(editorApp.state.Text(), syntaxPattern)
-	//editorApp.state.UpdateTextStyles(styles)
 
 	// Setting up auto-completion.
 	cm := &completion.DefaultCompletion{Editor: editorApp.state}
@@ -161,11 +140,31 @@ func main() {
 
 	cm.AddCompletor(&goCompletor{editor: editorApp.state}, popup)
 
+	// color scheme
+	colorScheme := syntax.ColorScheme{}
+	//colorScheme.Background = gvcolor.MakeColor(color.NRGBA{R: 32, G: 26, B: 16, A: 255})
+	//colorScheme.Foreground = gvcolor.MakeColor(color.NRGBA{R: 255, G: 255, B: 250, A: 255})
+	keywordColor, _ := gvcolor.Hex2Color("#AF00DB")
+	colorScheme.AddTokenType("keyword", syntax.Underline, keywordColor, gvcolor.Color{})
+
 	editorApp.state.WithOptions(
-		// gvcode.WithSoftTab(true),
-		gvcode.WithQuotePairs(quotePairs),
-		gvcode.WithBracketPairs(bracketPairs),
+		gvcode.WrapLine(true),
 		gvcode.WithAutoCompletion(cm),
+		gvcode.WithColorScheme(colorScheme),
+	)
+
+	tokens := HightlightTextByPattern(editorApp.state.Text(), syntaxPattern)
+	editorApp.state.SetSyntaxTokens(tokens...)
+
+	highlightColor, _ := gvcolor.Hex2Color("#e74c3c50")
+	highlightColor2, _ := gvcolor.Hex2Color("#f1c40f50")
+	highlightColor3, _ := gvcolor.Hex2Color("#e74c3c")
+
+	editorApp.state.AddDecorations(
+		decoration.Decoration{Source: "test", Start: 5, End: 150, Background: &decoration.Background{Color: highlightColor}},
+		decoration.Decoration{Source: "test", Start: 100, End: 200, Background: &decoration.Background{Color: highlightColor2}},
+		decoration.Decoration{Source: "test", Start: 100, End: 200, Squiggle: &decoration.Squiggle{Color: highlightColor3}},
+		decoration.Decoration{Source: "test", Start: 250, End: 400, Strikethrough: &decoration.Strikethrough{Color: highlightColor3}},
 	)
 
 	go func() {
@@ -181,31 +180,20 @@ func main() {
 
 }
 
-// func HightlightTextByPattern(text string, pattern string) []*gvcode.TextStyle {
-// 	var styles []*gvcode.TextStyle
+func HightlightTextByPattern(text string, pattern string) []syntax.Token {
+	var tokens []syntax.Token
 
-// 	re := regexp.MustCompile(pattern)
-// 	matches := re.FindAllIndex([]byte(text), -1)
-// 	for _, match := range matches {
-// 		styles = append(styles, &gvcode.TextStyle{
-// 			TextRange: gvcode.TextRange{
-// 				Start: match[0],
-// 				End:   match[1],
-// 			},
-// 			Color:      rgbaToOp(color.NRGBA{R: 255, A: 255}),
-// 			Background: rgbaToOp(color.NRGBA{R: 215, G: 215, B: 215, A: 250}),
-// 		})
-// 	}
+	re := regexp.MustCompile(pattern)
+	matches := re.FindAllIndex([]byte(text), -1)
+	for _, match := range matches {
+		tokens = append(tokens, syntax.Token{
+			Start:     match[0],
+			End:       match[1],
+			TokenType: "keyword",
+		})
+	}
 
-// 	return styles
-// }
-
-func rgbaToOp(textColor color.NRGBA) op.CallOp {
-	ops := new(op.Ops)
-
-	m := op.Record(ops)
-	paint.ColorOp{Color: textColor}.Add(ops)
-	return m.Stop()
+	return tokens
 }
 
 var golangKeywords = []string{

@@ -2,21 +2,17 @@ package decoration
 
 import (
 	"testing"
-
-	"gioui.org/op"
 )
 
 func TestInsertDecoration(t *testing.T) {
 	d := NewDecorationTree()
 
-	color := op.CallOp{}
-
-	bg := BackgroundDeco(0, 5, color)
-	italic := ItalicDeco(6, 9)
-	bold := BoldDeco(7, 10)
-	underline := UnderlineDeco(0, 6, color)
-	strikethrough := StrikethroughDeco(11, 15, color)
-	box := BoxDeco(16, 20, color)
+	bg := Decoration{Start: 0, End: 5, Background: &Background{}}
+	italic := Decoration{Start: 6, End: 9, Italic: true}
+	bold := Decoration{Start: 6, End: 9, Bold: true}
+	underline := Decoration{Start: 0, End: 6, Underline: &Underline{}}
+	strikethrough := Decoration{Start: 11, End: 15, Strikethrough: &Strikethrough{}}
+	box := Decoration{Start: 16, End: 20, Border: &Border{}}
 
 	d.Insert(bg)
 	d.Insert(italic)
@@ -25,7 +21,6 @@ func TestInsertDecoration(t *testing.T) {
 	d.Insert(strikethrough)
 	d.Insert(box)
 
-	//t.Fail()
 	all := d.QueryRange(0, 20)
 	if len(all) != 6 {
 		t.Fail()
@@ -35,16 +30,14 @@ func TestInsertDecoration(t *testing.T) {
 func TestRemoveDecorationBySource(t *testing.T) {
 	d := NewDecorationTree()
 
-	color := op.CallOp{}
-
-	bg := BackgroundDeco(0, 5, color)
-	bg.Src = "selection"
-	italic := ItalicDeco(6, 9)
-	bold := BoldDeco(7, 10)
-	underline := UnderlineDeco(0, 6, color)
-	strikethrough := StrikethroughDeco(11, 15, color)
-	box := BoxDeco(16, 20, color)
-	box.Src = "selection"
+	bg := Decoration{Start: 0, End: 5, Background: &Background{}}
+	italic := Decoration{Start: 6, End: 9, Italic: true}
+	bold := Decoration{Start: 6, End: 9, Bold: true}
+	underline := Decoration{Start: 0, End: 6, Underline: &Underline{}}
+	strikethrough := Decoration{Start: 11, End: 15, Strikethrough: &Strikethrough{}}
+	box := Decoration{Start: 16, End: 20, Border: &Border{}}
+	bg.Source = "selection"
+	box.Source = "selection"
 
 	d.Insert(bg)
 	d.Insert(italic)
@@ -61,9 +54,4 @@ func TestRemoveDecorationBySource(t *testing.T) {
 	if v := d.QueryRange(16, 20); len(v) > 0 {
 		t.Fail()
 	}
-
-	// for _, seg := range d.QueryRange(0, 20) {
-	// 	start, end := seg.Range()
-	// 	t.Logf("range: (%d, %d), styles: %d", start, end, seg.Source())
-	// }
 }

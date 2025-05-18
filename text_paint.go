@@ -40,7 +40,7 @@ func (e *textView) PaintText(gtx layout.Context, material op.CallOp, syntaxStyle
 	}
 
 	e.textPainter.SetViewport(viewport, e.scrollOff)
-	e.textPainter.Paint(gtx, e.shaper, e.layouter.Lines, material, syntaxStyles, nil)
+	e.textPainter.Paint(gtx, e.shaper, e.layouter.Lines, material, syntaxStyles, decorations)
 }
 
 // PaintSelection clips and paints the visible text selection rectangles using

@@ -19,8 +19,18 @@ func (e *Editor) AddDecorations(styles ...decoration.Decoration) {
 		e.decorations = decoration.NewDecorationTree()
 	}
 
-	for _, style := range styles {
-		e.decorations.Insert(style)
+	e.decorations.Insert(styles...)
+}
+
+func (e *Editor) ClearDecorations(source string) {
+	if e.decorations == nil {
+		return
+	}
+
+	if source == "" {
+		e.decorations.RemoveAll()
+	} else {
+		e.decorations.RemoveBySource(source)
 	}
 }
 
