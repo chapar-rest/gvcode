@@ -167,7 +167,7 @@ func (e *textView) PaintLineNumber(gtx layout.Context, lt *text.Shaper, material
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
-	dims := paintLineNumber(gtx, lt, e.params, viewport, e.layouter.Paragraphs, material)
+	dims := paintLineNumber(gtx, lt, e.params, viewport, &e.layouter.Paragraphs, material)
 	call := m.Stop()
 
 	rect := viewport.Sub(e.scrollOff)
