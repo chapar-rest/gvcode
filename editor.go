@@ -2,6 +2,7 @@ package gvcode
 
 import (
 	"image"
+	"io"
 	"strings"
 	"time"
 
@@ -278,11 +279,22 @@ func (e *Editor) Len() int {
 	return e.buffer.Len()
 }
 
-// Text returns the contents of the editor.
+// Text returns the contents of the editor. This method is not concurrent safe,
+// and you should use the Reader returned from GetReader to read from multiple
+// goroutines.
 func (e *Editor) Text() string {
 	e.initBuffer()
-	e.scratch = e.buffer.Text(e.scratch)
+
+	srcReader := buffer.NewReader(e.text.src)
+	e.scratch = srcReader.ReadAll(e.scratch)
 	return string(e.scratch)
+}
+
+// GetReader returns a [io.ReadSeeker] to the caller to read the text buffer. This
+// is the preferred way to read from the editor, especially when reading from
+// multiple goroutines.
+func (e *Editor) GetReader() io.ReadSeeker {
+	return buffer.NewReader(e.text.src)
 }
 
 func (e *Editor) SetText(s string) {

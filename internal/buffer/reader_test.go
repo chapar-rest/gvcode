@@ -7,12 +7,12 @@ import (
 
 func TestRuneOffset(t *testing.T) {
 	src := NewTextSource()
-	src.Insert(0, "hello,world.")
+	src.Replace(0, 0, "hello,world.")
 	if src.RuneOffset(12) != 12 {
 		t.Fail()
 	}
 
-	src.Insert(12, "你好，世界")
+	src.Replace(12, 12, "你好，世界")
 
 	_, size := utf8.DecodeRuneInString("你好，世界")
 	t.Log(size)
@@ -23,7 +23,8 @@ func TestRuneOffset(t *testing.T) {
 
 func TestReadAt(t *testing.T) {
 	src := NewTextSource()
-	src.Insert(0, "hello,world.")
+	reader := NewReader(src)
+	src.Replace(0, 0, "hello,world.")
 
 	if src.Len() != 12 {
 		t.Fail()
@@ -39,7 +40,7 @@ func TestReadAt(t *testing.T) {
 		t.Fail()
 	}
 
-	content := src.Text(buf)
+	content := reader.ReadAll(buf)
 	if string(content) != "hello,world." {
 		t.Fail()
 	}

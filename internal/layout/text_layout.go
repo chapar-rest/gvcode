@@ -42,7 +42,7 @@ type TextLayout struct {
 func NewTextLayout(src buffer.TextSource) TextLayout {
 	return TextLayout{
 		src:    src,
-		reader: bufio.NewReader(src),
+		reader: bufio.NewReader(buffer.NewReader(src)),
 	}
 }
 
@@ -64,8 +64,7 @@ func (tl *TextLayout) calcLineHeight(params *text.Parameters) fixed.Int26_6 {
 
 // reset prepares the index for reuse.
 func (tl *TextLayout) reset() {
-	tl.src.Seek(0, io.SeekStart)
-	tl.reader.Reset(tl.src)
+	tl.reader.Reset(buffer.NewReader(tl.src))
 	tl.Positions = tl.Positions[:0]
 	tl.Lines = tl.Lines[:0]
 	tl.Paragraphs = tl.Paragraphs[:0]
@@ -148,8 +147,9 @@ func (tl *TextLayout) wrapParagraph(glyphs glyphIter, paragraph []rune, maxWidth
 }
 
 func (tl *TextLayout) fakeLayout() {
+	srcReader := buffer.NewReader(tl.src)
 	// Make a fake glyph for every rune in the reader.
-	b := bufio.NewReader(tl.src)
+	b := bufio.NewReader(srcReader)
 	for _, _, err := b.ReadRune(); err != io.EOF; _, _, err = b.ReadRune() {
 		g := text.Glyph{Runes: 1, Flags: text.FlagClusterBreak}
 		line := Line{}

@@ -94,7 +94,8 @@ func TestIndentLines(t *testing.T) {
 		t.Run(fmt.Sprintf("%d: %s", i, tc.input), func(t *testing.T) {
 			text := setup(tc.input, tc.selection)
 			actual := text.IndentLines(tc.backward)
-			finalContent := text.src.Text(nil)
+			reader := buffer.NewReader(text.src)
+			finalContent := reader.ReadAll(nil)
 			if actual != tc.wantMoves || string(finalContent) != tc.want {
 				t.Logf("want content: %q, actual content: %q, want moves: %d, actual moves: %d", tc.want, string(finalContent), tc.wantMoves, actual)
 				t.Fail()
@@ -215,7 +216,8 @@ func TestIndentOnBreak(t *testing.T) {
 		t.Run(fmt.Sprintf("%d: %s", i, tc.input), func(t *testing.T) {
 			text := setup(tc.input, tc.selection)
 			actual := text.IndentOnBreak("\n")
-			finalContent := text.src.Text(nil)
+			reader := buffer.NewReader(text.src)
+			finalContent := reader.ReadAll(nil)
 			if actual != tc.wantMoves || string(finalContent) != tc.want {
 				t.Logf("want content: %q, actual content: %q, want moves: %d, actual moves: %d", tc.want, string(finalContent), tc.wantMoves, actual)
 				t.Fail()

@@ -5,23 +5,23 @@ import (
 )
 
 func readTableContent(pt *PieceTable) string {
-	reader := PieceTableReader{PieceTable: pt}
+	reader := NewReader(pt)
 	buf := []byte{}
-	return string(reader.Text(buf))
+	return string(reader.ReadAll(buf))
 }
 
-func TestInsert(t *testing.T) {
+func TestReplace(t *testing.T) {
 	pt := NewPieceTable([]byte{})
-	pt.Insert(0, "Hello, world")
-	pt.Insert(6, " Go")
+	pt.Replace(0, 0, "Hello, world")
+	pt.Replace(6, 6, " Go")
 
 	if readTableContent(pt) != "Hello, Go world" {
 		t.Fail()
 	}
 
 	pt = NewPieceTable([]byte("Hello, world"))
-	pt.Insert(6, " Go")
-	pt.Insert(6, " welcome to the")
+	pt.Replace(6, 6, " Go")
+	pt.Replace(6, 6, " welcome to the")
 
 	expected := readTableContent(pt)
 	if expected != "Hello, welcome to the Go world" {
@@ -29,14 +29,14 @@ func TestInsert(t *testing.T) {
 	}
 }
 
-func TestAppendInsert(t *testing.T) {
+func TestAppendReplace(t *testing.T) {
 	SetDebug(true)
 	pt := NewPieceTable([]byte{})
-	pt.Insert(0, "H")
-	pt.Insert(1, "e")
-	pt.Insert(2, "l")
-	pt.Insert(3, "l")
-	pt.Insert(4, "o")
+	pt.Replace(0, 0, "H")
+	pt.Replace(1, 1, "e")
+	pt.Replace(2, 2, "l")
+	pt.Replace(3, 3, "l")
+	pt.Replace(4, 4, "o")
 
 	expected := readTableContent(pt)
 	if expected != "Hello" {
@@ -49,7 +49,7 @@ func TestAppendInsert(t *testing.T) {
 		t.Fail()
 	}
 
-	pt.Insert(5, ", world")
+	pt.Replace(5, 5, ", world")
 	if pt.pieces.Length() != 2 {
 		t.Logf("expected length: %d, actual: %d", 2, pt.pieces.Length())
 		t.Fail()
@@ -60,8 +60,8 @@ func TestAppendInsert(t *testing.T) {
 func TestUndo(t *testing.T) {
 	pt := NewPieceTable([]byte(""))
 
-	pt.Insert(0, "Hello, ")
-	pt.Insert(7, "world")
+	pt.Replace(0, 0, "Hello, ")
+	pt.Replace(7, 7, "world")
 
 	if pt.undoStack.depth() != 2 {
 		t.Fail()
@@ -120,7 +120,7 @@ func TestUndo(t *testing.T) {
 func TestUndoRedo(t *testing.T) {
 	pt := NewPieceTable([]byte(""))
 
-	pt.Insert(0, "Hello")
+	pt.Replace(0, 0, "Hello")
 
 	if pt.undoStack.depth() != 1 {
 		t.Fail()
@@ -153,9 +153,9 @@ func TestUndoRedo(t *testing.T) {
 	}
 
 	// After insert or other operations, redo stack should be empty.
-	pt.Insert(5, "world")
+	pt.Replace(5, 5, "world")
 	pt.Undo()
-	pt.Insert(5, "Golang")
+	pt.Replace(5, 5, "Golang")
 	if pt.redoStack.depth() > 0 {
 		t.Fail()
 	}
@@ -238,11 +238,11 @@ func TestErase(t *testing.T) {
 
 	for _, tc := range cases {
 		pt := NewPieceTable([]byte(""))
-		pt.Insert(0, "Hello")
-		pt.Insert(5, ",world")
+		pt.Replace(0, 0, "Hello")
+		pt.Replace(5, 5, ",world")
 
 		t.Run(tc.desc, func(t *testing.T) {
-			pt.Erase(tc.input[0], tc.input[1])
+			pt.Replace(tc.input[0], tc.input[1], "")
 			if ans := readTableContent(pt); ans != tc.want.content || pt.seqBytes != tc.want.bytes {
 				t.Errorf("got content: %s, want content: %s; got bytes: %d, want bytes: %d", ans, tc.want.content, pt.seqBytes, tc.want.bytes)
 			}
