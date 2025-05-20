@@ -1,6 +1,8 @@
 package gvcode
 
 import (
+	"log/slog"
+
 	"github.com/oligo/gvcode/textstyle/decoration"
 	"github.com/oligo/gvcode/textstyle/syntax"
 )
@@ -15,25 +17,25 @@ type TextRange struct {
 }
 
 func (e *Editor) AddDecorations(styles ...decoration.Decoration) {
-	if e.decorations == nil {
-		e.decorations = decoration.NewDecorationTree()
-	}
-
-	e.decorations.Insert(styles...)
+	e.initBuffer()
+	e.text.decorations.Insert(styles...)
 }
 
 func (e *Editor) ClearDecorations(source string) {
-	if e.decorations == nil {
-		return
-	}
+	e.initBuffer()
 
 	if source == "" {
-		e.decorations.RemoveAll()
+		e.text.decorations.RemoveAll()
 	} else {
-		e.decorations.RemoveBySource(source)
+		e.text.decorations.RemoveBySource(source)
 	}
 }
 
 func (e *Editor) SetSyntaxTokens(tokens ...syntax.Token) {
-	e.syntaxStyles.Set(tokens...)
+	e.initBuffer()
+	if e.colorScheme == nil {
+		slog.Info("No color scheme configured.")
+		return
+	}
+	e.text.syntaxStyles.Set(tokens...)
 }

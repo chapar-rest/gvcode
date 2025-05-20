@@ -11,8 +11,6 @@ import (
 	"gioui.org/text"
 	"gioui.org/unit"
 	lt "github.com/oligo/gvcode/internal/layout"
-	"github.com/oligo/gvcode/textstyle/decoration"
-	"github.com/oligo/gvcode/textstyle/syntax"
 )
 
 // calculateViewSize determines the size of the current visible content,
@@ -33,14 +31,14 @@ func (e *textView) layoutText(shaper *text.Shaper) {
 
 // PaintText clips and paints the visible text glyph outlines using the provided
 // material to fill the glyphs.
-func (e *textView) PaintText(gtx layout.Context, material op.CallOp, syntaxStyles *syntax.TextTokens, decorations *decoration.DecorationTree) {
+func (e *textView) PaintText(gtx layout.Context, material op.CallOp) {
 	viewport := image.Rectangle{
 		Min: e.scrollOff,
 		Max: e.viewSize.Add(e.scrollOff),
 	}
 
 	e.textPainter.SetViewport(viewport, e.scrollOff)
-	e.textPainter.Paint(gtx, e.shaper, e.layouter.Lines, material, syntaxStyles, decorations)
+	e.textPainter.Paint(gtx, e.shaper, e.layouter.Lines, material, e.syntaxStyles, e.decorations)
 }
 
 // PaintSelection clips and paints the visible text selection rectangles using
@@ -244,4 +242,7 @@ func (e *textView) adjustDescentPadding() int {
 
 	leading := (e.lineHeight - height).Round()
 	return int(math.Round(float64(float32(leading) / 2.0)))
+}
+
+type textViewSplitter struct {
 }
