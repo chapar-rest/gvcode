@@ -71,7 +71,7 @@ func (e *textView) MoveWords(distance int, selAct selectionAction) {
 func (e *textView) readBySeperator(direction int, caretOff int, seperator func(r rune) bool) []rune {
 	buf := make([]rune, 0)
 	for {
-		if caretOff < 0 || caretOff > e.Len() {
+		if caretOff < 0 || caretOff > e.src.Len() {
 			break
 		}
 
@@ -97,7 +97,7 @@ func (e *textView) readBySeperator(direction int, caretOff int, seperator func(r
 //
 // The word boundary is checked using the word boundary characters or just spaces.
 func (e *textView) ReadWord(bySpace bool) (string, int) {
-	caret := e.closestToRune(max(e.caret.start, e.caret.end))
+	caret := max(e.caret.start, e.caret.end)
 	buf := make([]rune, 0)
 
 	seperator := func(r rune) bool {
@@ -107,9 +107,9 @@ func (e *textView) ReadWord(bySpace bool) (string, int) {
 		return e.isWordSeperator(r)
 	}
 
-	left := e.readBySeperator(-1, caret.Runes-1, seperator)
+	left := e.readBySeperator(-1, caret-1, seperator)
 	buf = append(buf, left...)
-	right := e.readBySeperator(1, caret.Runes, seperator)
+	right := e.readBySeperator(1, caret, seperator)
 	buf = append(buf, right...)
 
 	return string(buf), len(left)
@@ -118,13 +118,13 @@ func (e *textView) ReadWord(bySpace bool) (string, int) {
 // ReadUntil reads in the specified direction from the current caret position until the
 // seperator returns false. It returns the read text.
 func (e *textView) ReadUntil(direction int, seperator func(r rune) bool) string {
-	caret := e.closestToRune(max(e.caret.start, e.caret.end))
+	caret := max(e.caret.start, e.caret.end)
 	var buf []rune
 
 	if direction <= 0 {
-		buf = e.readBySeperator(direction, caret.Runes-1, seperator)
+		buf = e.readBySeperator(direction, caret-1, seperator)
 	} else {
-		buf = e.readBySeperator(1, caret.Runes, seperator)
+		buf = e.readBySeperator(1, caret, seperator)
 	}
 
 	return string(buf)
