@@ -87,12 +87,12 @@ func (tl *TextLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 			currentIdx := 0
 
 			for {
-				text, readErr := tl.reader.ReadBytes('\n')
+				text, readErr := tl.reader.ReadString('\n')
 				// the last line returned by ReadBytes returns EOF and may have remaining bytes to process.
 				if len(text) > 0 {
-					tl.layoutNextParagraph(shaper, string(text), paragraphCount-1 == currentIdx, tabWidth, wrapLine)
+					tl.layoutNextParagraph(shaper, text, paragraphCount-1 == currentIdx, tabWidth, wrapLine)
 
-					paragraphRunes := []rune(string(text))
+					paragraphRunes := []rune(text)
 					tl.indexGraphemeClusters(paragraphRunes, runeOffset)
 					runeOffset += len(paragraphRunes)
 					currentIdx++
