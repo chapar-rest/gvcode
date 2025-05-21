@@ -17,6 +17,7 @@ import (
 	"gioui.org/op"
 	"gioui.org/text"
 	"gioui.org/unit"
+	"gioui.org/widget"
 	"gioui.org/widget/material"
 	"github.com/oligo/gvcode"
 	"github.com/oligo/gvcode/addons/completion"
@@ -32,9 +33,11 @@ type (
 )
 
 type EditorApp struct {
-	window *app.Window
-	th     *material.Theme
-	state  *gvcode.Editor
+	window  *app.Window
+	th      *material.Theme
+	state   *gvcode.Editor
+	xScroll widget.Scrollbar
+	yScroll widget.Scrollbar
 }
 
 const (
@@ -72,6 +75,14 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 		}
 	}
 
+	xScrollDist := ed.xScroll.ScrollDistance()
+	yScrollDist := ed.yScroll.ScrollDistance()
+	if xScrollDist != 0.0 || yScrollDist != 0.0 {
+		ed.state.Scroll(gtx, xScrollDist, yScrollDist)
+	}
+
+	scrollIndicatorColor := gvcolor.MakeColor(th.Fg).MulAlpha(0x40)
+
 	return layout.Flex{
 		Axis: layout.Vertical,
 	}.Layout(gtx,
@@ -90,13 +101,45 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 				Left:   unit.Dp(6),
 				Right:  unit.Dp(6),
 			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				es := wg.NewEditor(th, ed.state)
-				es.Font.Typeface = "monospace"
-				es.Font.Weight = font.SemiBold
-				es.TextSize = unit.Sp(14)
-				es.LineHeightScale = 1.5
+				return layout.Flex{
+					Axis: layout.Horizontal,
+				}.Layout(gtx,
+					layout.Flexed(1.0, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{
+							Axis: layout.Vertical,
+						}.Layout(gtx,
+							layout.Flexed(1.0, func(gtx layout.Context) layout.Dimensions {
+								es := wg.NewEditor(th, ed.state)
+								es.Font.Typeface = "monospace"
+								es.Font.Weight = font.SemiBold
+								es.TextSize = unit.Sp(14)
+								es.LineHeightScale = 1.5
 
-				return es.Layout(gtx)
+								return es.Layout(gtx)
+							}),
+
+							layout.Rigid(func(gtx C) D {
+								minX, maxX, _, _ := ed.state.ScrollRatio()
+								bar := material.Scrollbar(th, &ed.xScroll)
+								bar.Indicator.Color = scrollIndicatorColor.NRGBA()
+								bar.Indicator.CornerRadius = unit.Dp(1)
+								//bar.Indicator.MinorWidth = unit.Dp(12)
+								return bar.Layout(gtx, layout.Horizontal, minX, maxX)
+							}),
+						)
+
+					}),
+
+					layout.Rigid(func(gtx C) D {
+						_, _, minY, maxY := ed.state.ScrollRatio()
+						bar := material.Scrollbar(th, &ed.yScroll)
+						bar.Indicator.Color = scrollIndicatorColor.NRGBA()
+						bar.Indicator.CornerRadius = unit.Dp(1)
+						//bar.Indicator.MinorWidth = unit.Dp(8)
+						return bar.Layout(gtx, layout.Vertical, minY, maxY)
+					}),
+				)
+
 			})
 		}),
 		layout.Rigid(func(gtx C) D {

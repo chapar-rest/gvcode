@@ -651,9 +651,9 @@ func (e *Editor) ScrollRatio() (minX, maxX float32, minY, maxY float32) {
 func (e *Editor) Scroll(gtx layout.Context, xRatio, yRatio float32) {
 	textDims := e.text.FullDimensions().Size
 	xRatio = min(1.0, xRatio)
-	xRatio = max(xRatio, 0)
+	xRatio = max(xRatio, -1.0)
 	yRatio = min(1.0, yRatio)
-	yRatio = max(0, yRatio)
+	yRatio = max(yRatio, -1.0)
 
 	e.text.ScrollRel(int(float32(textDims.X)*xRatio), int(float32(textDims.Y)*yRatio))
 }
