@@ -146,7 +146,7 @@ func main() {
 	colorScheme.AddTokenType("keyword", syntax.Underline, keywordColor, gvcolor.Color{})
 
 	editorApp.state.WithOptions(
-		gvcode.WrapLine(true),
+		gvcode.WrapLine(false),
 		gvcode.WithAutoCompletion(cm),
 		gvcode.WithColorScheme(colorScheme),
 	)

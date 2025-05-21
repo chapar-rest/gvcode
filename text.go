@@ -477,13 +477,28 @@ func (e *textView) ScrollToCaret() {
 
 	miny := caret.Y - caret.Ascent.Ceil()
 	maxy := caret.Y + caret.Descent.Ceil()
-	var dist int
-	if d := miny - e.scrollOff.Y; d < 0 {
-		dist = d
-	} else if d := maxy - (e.scrollOff.Y + e.viewSize.Y); d > 0 {
-		dist = d
+
+	// The configures the distance in pixel the caret is from the horizontal border
+	// of the editor, at which point we should scroll to adjust the viewport.
+	// This ensures the caret can easily be seen when scrolled hotizontally.
+	minScrollGap := (e.params.PxPerEm * 1).Ceil()
+
+	var xdist, ydist int
+	// calculate x delta, accounting the padding
+	if d := caret.X.Floor() - minScrollGap - e.scrollOff.X; d < 0 {
+		xdist = d
+	} else if d := caret.X.Ceil() + minScrollGap - (e.scrollOff.X + e.viewSize.X); d > 0 {
+		xdist = d
 	}
-	e.ScrollRel(0, dist)
+
+	// calcualte y delta
+	if d := miny - e.scrollOff.Y; d < 0 {
+		ydist = d
+	} else if d := maxy - (e.scrollOff.Y + e.viewSize.Y); d > 0 {
+		ydist = d
+	}
+
+	e.ScrollRel(xdist, ydist)
 }
 
 // SelectionLen returns the length of the selection, in runes; it is

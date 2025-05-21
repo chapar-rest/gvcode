@@ -13,6 +13,7 @@ import (
 	"gioui.org/io/pointer"
 	"gioui.org/io/transfer"
 	"gioui.org/layout"
+	"github.com/oligo/gvcode/internal/scroll"
 )
 
 func (e *Editor) processEvents(gtx layout.Context) (ev EditorEvent, ok bool) {
@@ -51,28 +52,25 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 	visibleDims := e.text.Dimensions()
 
 	scrollOffX := e.text.ScrollOff().X
-	scrollX.Min = min(-scrollOffX, 0)
+	scrollX.Min = -scrollOffX
 	scrollX.Max = max(0, textDims.Size.X-(scrollOffX+visibleDims.Size.X))
 
 	scrollOffY := e.text.ScrollOff().Y
 	scrollY.Min = -scrollOffY
 	scrollY.Max = max(0, textDims.Size.Y-(scrollOffY+visibleDims.Size.Y))
-
 	sbounds := e.text.ScrollBounds()
-	var soff int
-	var smin, smax int
-
-	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, gesture.Vertical, scrollX, scrollY)
-	// Have to wait for the patch to be accepted by Gio dev team.
-	// if e.scroller.Direction() == gesture.Horizontal {
-	// 	e.text.ScrollRel(sdist, 0)
-	// 	soff = e.text.ScrollOff().X
-	// 	smin, smax = sbounds.Min.X, sbounds.Max.X
-	// } else {
-	e.text.ScrollRel(0, sdist)
-	soff = e.text.ScrollOff().Y
-	smin, smax = sbounds.Min.Y, sbounds.Max.Y
-	//}
+	
+	var soff, smin, smax int
+	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, scrollX, scrollY)
+	if e.scroller.Direction() == scroll.Horizontal {
+		e.text.ScrollRel(sdist, 0)
+		soff = e.text.ScrollOff().X
+		smin, smax = sbounds.Min.X, sbounds.Max.X
+	} else {
+		e.text.ScrollRel(0, sdist)
+		soff = e.text.ScrollOff().Y
+		smin, smax = sbounds.Min.Y, sbounds.Max.Y
+	}
 
 	for {
 		evt, ok := e.clicker.Update(gtx.Source)
@@ -117,7 +115,7 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 			if !e.readOnly {
 				gtx.Execute(key.SoftKeyboardCmd{Show: true})
 			}
-			if e.scroller.State() != gesture.StateFlinging {
+			if e.scroller.State() != scroll.StateFlinging {
 				e.scrollCaret = true
 			}
 

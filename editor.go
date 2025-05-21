@@ -20,6 +20,7 @@ import (
 	"gioui.org/unit"
 	"github.com/oligo/gvcode/color"
 	"github.com/oligo/gvcode/internal/buffer"
+	"github.com/oligo/gvcode/internal/scroll"
 	"github.com/oligo/gvcode/textstyle/syntax"
 )
 
@@ -68,7 +69,7 @@ type Editor struct {
 
 	dragging    bool
 	dragger     gesture.Drag
-	scroller    gesture.Scroll
+	scroller    scroll.Scroll
 	scrollCaret bool
 	showCaret   bool
 	clicker     gesture.Click
@@ -631,20 +632,30 @@ func (e *Editor) ClearSelection() {
 	e.text.ClearSelection()
 }
 
-// returns start and end offset ratio of viewport
-func (e *Editor) ViewPortRatio() (float32, float32) {
+// ScrollRatio returns the viewport's start and end scrolling offset in ratio
+// relating to the reandered document coordinate space.
+func (e *Editor) ScrollRatio() (minX, maxX float32, minY, maxY float32) {
 	textDims := e.text.FullDimensions()
 	visibleDims := e.text.Dimensions()
-	scrollOffY := e.text.ScrollOff().Y
+	scrollOff := e.text.ScrollOff()
 
-	return float32(scrollOffY) / float32(textDims.Size.Y),
-		float32(scrollOffY+visibleDims.Size.Y) / float32(textDims.Size.Y)
+	minX = float32(scrollOff.X) / float32(textDims.Size.X)
+	maxX = float32(scrollOff.X+visibleDims.Size.X) / float32(textDims.Size.X)
+	minY = float32(scrollOff.Y) / float32(textDims.Size.Y)
+	maxY = float32(scrollOff.Y+visibleDims.Size.Y) / float32(textDims.Size.Y)
+	return
 }
 
-func (e *Editor) ScrollByRatio(gtx layout.Context, ratio float32) {
-	textDims := e.text.FullDimensions()
-	sdist := int(float32(textDims.Size.Y) * ratio)
-	e.text.ScrollRel(0, sdist)
+// Scroll scrolls the horizontal or vertical scrollbar, using ratio related to
+// the rendered document size.
+func (e *Editor) Scroll(gtx layout.Context, xRatio, yRatio float32) {
+	textDims := e.text.FullDimensions().Size
+	xRatio = min(1.0, xRatio)
+	xRatio = max(xRatio, 0)
+	yRatio = min(1.0, yRatio)
+	yRatio = max(0, yRatio)
+
+	e.text.ScrollRel(int(float32(textDims.X)*xRatio), int(float32(textDims.Y)*yRatio))
 }
 
 func (e *Editor) ReadOnly() bool {
