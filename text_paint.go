@@ -149,8 +149,10 @@ func (e *textView) paintLineHighlight(gtx layout.Context, material op.CallOp) {
 		return
 	}
 
-	bounds := image.Rectangle{Min: image.Point{X: 0, Y: start.Y - start.Ascent.Ceil()},
-		Max: image.Point{X: gtx.Constraints.Max.X, Y: end.Y + end.Descent.Ceil()}}.Sub(e.scrollOff)
+	bounds := image.Rectangle{
+		Min: image.Point{X: 0, Y: start.Y - start.Ascent.Ceil()},
+		Max: image.Point{X: gtx.Constraints.Max.X, Y: end.Y + end.Descent.Ceil()},
+	}.Sub(image.Point{Y: e.scrollOff.Y}) // fill the whole line.
 
 	area := clip.Rect(e.adjustPadding(bounds)).Push(gtx.Ops)
 	material.Add(gtx.Ops)

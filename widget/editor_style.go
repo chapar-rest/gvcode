@@ -32,8 +32,8 @@ type EditorStyle struct {
 	// If not set, line will not be highlighted.
 	LineHighlightColor gvcolor.Color
 	// Gap size between the line number bar and the main text area.
-	LineNumberGutter unit.Dp
-	LineNumberColor  gvcolor.Color
+	LineNumberGutterGap unit.Dp
+	LineNumberColor     gvcolor.Color
 
 	Editor *gvcode.Editor
 	shaper *text.Shaper
@@ -46,14 +46,14 @@ func NewEditor(th *material.Theme, editor *gvcode.Editor) EditorStyle {
 		Font: font.Font{
 			Typeface: th.Face,
 		},
-		LineHeightScale:    1.2,
-		TabWidth:           4,
-		TextSize:           th.TextSize,
-		Color:              gvcolor.MakeColor(th.Fg),
-		SelectionColor:     gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x60),
-		LineHighlightColor: gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x30),
-		LineNumberColor:    gvcolor.MakeColor(th.Fg).MulAlpha(0xb6),
-		LineNumberGutter:   unit.Dp(24),
+		LineHeightScale:     1.2,
+		TabWidth:            4,
+		TextSize:            th.TextSize,
+		Color:               gvcolor.MakeColor(th.Fg),
+		SelectionColor:      gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x60),
+		LineHighlightColor:  gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x30),
+		LineNumberColor:     gvcolor.MakeColor(th.Fg).MulAlpha(0xb6),
+		LineNumberGutterGap: unit.Dp(24),
 	}
 
 	return es
@@ -65,7 +65,7 @@ func (e EditorStyle) Layout(gtx layout.Context) layout.Dimensions {
 		gvcode.WithTabWidth(e.TabWidth),
 	)
 
-	e.Editor.LineNumberGutter = e.LineNumberGutter
+	e.Editor.LineNumberGutterGap = e.LineNumberGutterGap
 	e.Editor.TextMaterial = e.Color
 	e.Editor.SelectMaterial = gvcolor.MakeColor(blendDisabledColor(!gtx.Enabled(), e.SelectionColor.NRGBA()))
 	e.Editor.LineMaterial = e.LineHighlightColor

@@ -66,7 +66,7 @@ lineLoop:
 
 		dims.Size = image.Point{X: max(bounds.Dx(), dims.Size.X), Y: dims.Size.Y + bounds.Dy()}
 		trans := op.Affine(f32.Affine2D{}.Offset(
-			f32.Point{X: float32(glyphs[0].X.Floor()), Y: float32(line.StartY)}.Sub(layout.FPt(viewport.Min))),
+			f32.Point{X: float32(glyphs[0].X.Floor()), Y: float32(line.StartY)}.Sub(layout.FPt(image.Point{Y: viewport.Min.Y}))),
 		).Push(gtx.Ops)
 
 		// draw glyph

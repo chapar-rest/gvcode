@@ -26,8 +26,9 @@ import (
 
 // Editor implements an editable and scrollable text area.
 type Editor struct {
-	// LineNumberGutter specifies the gap between the line number and the main text.
-	LineNumberGutter unit.Dp
+	// LineNumberGutterGap specifies the right inset between the line number and the
+	// editor text area.
+	LineNumberGutterGap unit.Dp
 	// Color used to paint text. If there is a color scheme provided, the foreground
 	// and background from the color scheme is used to paint the text and the background
 	// of the editor.
@@ -78,6 +79,9 @@ type Editor struct {
 	commands map[key.Name][]keyCommand
 	// autoInsertions tracks recently inserted closing brackets or quotes.
 	autoInsertions map[int]rune
+	// gutterWidth can be used to guide to set the horizontal offset when
+	// laying out a horizontal scrollbar.
+	gutterWidth int
 }
 
 type imeState struct {
@@ -184,16 +188,13 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 		Axis: layout.Horizontal,
 	}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return e.text.PaintLineNumber(gtx, lt, e.LineNumberMaterial.Op(gtx.Ops))
+			dims := layout.Inset{Right: e.LineNumberGutterGap}.Layout(gtx,
+				func(gtx layout.Context) layout.Dimensions {
+					return e.text.PaintLineNumber(gtx, lt, e.LineNumberMaterial.Op(gtx.Ops))
+				})
+			e.gutterWidth = dims.Size.X
+			return dims
 		}),
-
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			if e.LineNumberGutter <= 0 {
-				e.LineNumberGutter = unit.Dp(24)
-			}
-			return layout.Spacer{Width: e.LineNumberGutter}.Layout(gtx)
-		}),
-
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			e.text.Layout(gtx, lt)
 			dims := e.layout(gtx)
@@ -656,6 +657,12 @@ func (e *Editor) Scroll(gtx layout.Context, xRatio, yRatio float32) {
 	yRatio = max(yRatio, -1.0)
 
 	e.text.ScrollRel(int(float32(textDims.X)*xRatio), int(float32(textDims.Y)*yRatio))
+}
+
+// GutterWidth returns the width of the gutter in pixel, which can be used to
+// guide to set the horizontal offset when laying out a horizontal scrollbar.
+func (e *Editor) GutterWidth() int {
+	return e.gutterWidth
 }
 
 func (e *Editor) ReadOnly() bool {

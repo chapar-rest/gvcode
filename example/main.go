@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"log"
 	_ "net/http/pprof" // This line registers the pprof handlers
@@ -81,7 +82,7 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 		ed.state.Scroll(gtx, xScrollDist, yScrollDist)
 	}
 
-	scrollIndicatorColor := gvcolor.MakeColor(th.Fg).MulAlpha(0x40)
+	scrollIndicatorColor := gvcolor.MakeColor(th.Fg).MulAlpha(0x30)
 
 	return layout.Flex{
 		Axis: layout.Vertical,
@@ -105,37 +106,35 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 					Axis: layout.Horizontal,
 				}.Layout(gtx,
 					layout.Flexed(1.0, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{
-							Axis: layout.Vertical,
-						}.Layout(gtx,
-							layout.Flexed(1.0, func(gtx layout.Context) layout.Dimensions {
-								es := wg.NewEditor(th, ed.state)
-								es.Font.Typeface = "monospace"
-								es.Font.Weight = font.SemiBold
-								es.TextSize = unit.Sp(14)
-								es.LineHeightScale = 1.5
+						es := wg.NewEditor(th, ed.state)
+						es.Font.Typeface = "monospace"
+						es.Font.Weight = font.SemiBold
+						es.TextSize = unit.Sp(14)
+						es.LineHeightScale = 1.5
 
-								return es.Layout(gtx)
-							}),
+						dims := es.Layout(gtx)
 
-							layout.Rigid(func(gtx C) D {
+						macro := op.Record(gtx.Ops)
+						scrollbarDims := func(gtx C) D {
+							return layout.Inset{
+								Left: gtx.Metric.PxToDp(ed.state.GutterWidth()),
+							}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								minX, maxX, _, _ := ed.state.ScrollRatio()
-								bar := material.Scrollbar(th, &ed.xScroll)
-								bar.Indicator.Color = scrollIndicatorColor.NRGBA()
-								bar.Indicator.CornerRadius = unit.Dp(1)
-								//bar.Indicator.MinorWidth = unit.Dp(12)
+								bar := makeScrollbar(th, &ed.xScroll, scrollIndicatorColor.NRGBA())
 								return bar.Layout(gtx, layout.Horizontal, minX, maxX)
-							}),
-						)
+							})
+						}(gtx)
 
+						scrollbarOp := macro.Stop()
+						defer op.Offset(image.Point{Y: dims.Size.Y - scrollbarDims.Size.Y}).Push(gtx.Ops).Pop()
+						scrollbarOp.Add(gtx.Ops)
+
+						return dims
 					}),
 
 					layout.Rigid(func(gtx C) D {
 						_, _, minY, maxY := ed.state.ScrollRatio()
-						bar := material.Scrollbar(th, &ed.yScroll)
-						bar.Indicator.Color = scrollIndicatorColor.NRGBA()
-						bar.Indicator.CornerRadius = unit.Dp(1)
-						//bar.Indicator.MinorWidth = unit.Dp(8)
+						bar := makeScrollbar(th, &ed.yScroll, scrollIndicatorColor.NRGBA())
 						return bar.Layout(gtx, layout.Vertical, minY, maxY)
 					}),
 				)
@@ -150,6 +149,16 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 		}),
 	)
 
+}
+
+func makeScrollbar(th *material.Theme, scroll *widget.Scrollbar, color color.NRGBA) material.ScrollbarStyle {
+	bar := material.Scrollbar(th, scroll)
+	bar.Indicator.Color = color
+	bar.Indicator.CornerRadius = unit.Dp(0)
+	bar.Indicator.MinorWidth = unit.Dp(12)
+	bar.Track.MajorPadding = unit.Dp(0)
+	bar.Track.MinorPadding = unit.Dp(1)
+	return bar
 }
 
 func main() {
