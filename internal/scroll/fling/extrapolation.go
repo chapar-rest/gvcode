@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense OR MIT
 
-// This package are copied from Gio internal fling package: https://github.com/gioui/gio/tree/main/internal/fling. 
+// This package is copied from Gio internal fling package: https://github.com/gioui/gio/tree/main/internal/fling.
 // All the credits to the Gio authors and its contributors.
 package fling
 

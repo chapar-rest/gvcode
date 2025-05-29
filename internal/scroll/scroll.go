@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: Unlicense OR MIT
-
-// Most of the code in this package and the fling package are from Gio,
-// with minor modifications to change to behaviour of the scroller.
 package scroll
 
 import (
@@ -24,7 +20,7 @@ import (
 // movements as well as drag and fling touch gestures.
 //
 // This is a modified version of the original [gesture.Scroll] in Gio.
-// The most importantly change is that scrolling axis is detected, not
+// The most important change is that scrolling axis is detected, not
 // passed by user.
 type Scroll struct {
 	dragging  bool
@@ -32,9 +28,16 @@ type Scroll struct {
 	flinger   fling.Animation
 	pid       pointer.ID
 	last      int
-	lastAxis  Axis
 	// Leftover scroll.
 	scroll float32
+	// Position of the initial pointer.Press.
+	initialPos f32.Point
+	// The initial pointer press duration.
+	initialPosTime time.Duration
+	// The determined axis for the current drag gesture or wheel scroll.
+	scrollAxis Axis
+	// True if the axis for the current gesture/scrolling has been determined.
+	axisLocked bool
 }
 
 type ScrollState uint8
@@ -72,13 +75,17 @@ func (s *Scroll) Stop() {
 
 // Direction returns the last scrolling axis detected by Update.
 func (s *Scroll) Direction() Axis {
-	return s.lastAxis
+	// if s.axisLocked || s.flinger.Active() {
+	// 	return s.scrollAxis
+	// }
+	// slog.Info("returning default direction", "direction", Vertical)
+	// return Vertical
+	return s.scrollAxis
 }
 
 // Update state and report the scroll distance along axis.
 func (s *Scroll) Update(cfg unit.Metric, q input.Source, t time.Time, scrollx, scrolly pointer.ScrollRange) int {
 	total := 0
-	s.lastAxis = Vertical
 	f := pointer.Filter{
 		Target:  s,
 		Kinds:   pointer.Press | pointer.Drag | pointer.Release | pointer.Scroll | pointer.Cancel,
@@ -95,14 +102,6 @@ func (s *Scroll) Update(cfg unit.Metric, q input.Source, t time.Time, scrollx, s
 			continue
 		}
 
-		if e.Modifiers.Contain(key.ModShift) {
-			s.lastAxis = Horizontal
-		} else if e.Scroll.X != 0.0 {
-			s.lastAxis = Horizontal
-		}
-
-		//slog.Info("scrolling started!!!", "eventKind", e.Kind, "position", e.Position, "axis", s.lastAxis)
-
 		switch e.Kind {
 		case pointer.Press:
 			if s.dragging {
@@ -113,13 +112,16 @@ func (s *Scroll) Update(cfg unit.Metric, q input.Source, t time.Time, scrollx, s
 			if e.Source != pointer.Touch && runtime.GOOS != "android" {
 				break
 			}
+
 			s.Stop()
-			s.estimator = fling.Extrapolation{}
-			v := s.val(s.lastAxis, e.Position)
-			s.last = int(math.Round(float64(v)))
-			s.estimator.Sample(e.Time, v)
+			s.initialPos = e.Position // Store initial position
+			s.initialPosTime = e.Time
 			s.dragging = true
 			s.pid = e.PointerID
+			// Reset axis lock for the new gesture
+			s.axisLocked = false
+			// Reset estimator
+			s.estimator = fling.Extrapolation{}
 		case pointer.Release:
 			if s.pid != e.PointerID {
 				break
@@ -131,8 +133,16 @@ func (s *Scroll) Update(cfg unit.Metric, q input.Source, t time.Time, scrollx, s
 			fallthrough
 		case pointer.Cancel:
 			s.dragging = false
+			//s.axisLocked = false
 		case pointer.Scroll:
-			switch s.lastAxis {
+			if e.Modifiers.Contain(key.ModShift) {
+				s.scrollAxis = Horizontal
+			} else {
+				s.scrollAxis = Vertical
+			}
+			s.axisLocked = true
+
+			switch s.scrollAxis {
 			case Horizontal:
 				s.scroll += e.Scroll.X
 			case Vertical:
@@ -145,25 +155,56 @@ func (s *Scroll) Update(cfg unit.Metric, q input.Source, t time.Time, scrollx, s
 			if !s.dragging || s.pid != e.PointerID {
 				continue
 			}
-			val := s.val(s.lastAxis, e.Position)
-			s.estimator.Sample(e.Time, val)
-			v := int(math.Round(float64(val)))
-			dist := s.last - v
-			if e.Priority < pointer.Grabbed {
-				slop := cfg.Dp(touchSlop)
-				if dist := dist; dist >= slop || -slop >= dist {
+
+			var scrollDelta int
+
+			if !s.axisLocked {
+				deltaX := e.Position.X - s.initialPos.X
+				deltaY := e.Position.Y - s.initialPos.Y
+				slopVal := float32(cfg.Dp(touchSlop))
+				absDeltaX := float32(math.Abs(float64(deltaX)))
+				absDeltaY := float32(math.Abs(float64(deltaY)))
+
+				// If slop overcome
+				if absDeltaX > slopVal || absDeltaY > slopVal {
+					if absDeltaX > absDeltaY {
+						s.scrollAxis = Horizontal
+					} else {
+						s.scrollAxis = Vertical
+					}
+					s.axisLocked = true
 					q.Execute(pointer.GrabCmd{Tag: s, ID: e.PointerID})
+
+					val := s.val(s.scrollAxis, e.Position)
+					initialVal := s.val(s.scrollAxis, s.initialPos)
+					s.last = int(math.Round(float64(val)))
+					// Sample the initial point (or current point) for the determined axis
+					// The estimator needs to be fed values along the chosen axis.
+					s.estimator.Sample(s.initialPosTime, initialVal)
+					// And also sample the current point on this axis.
+					s.estimator.Sample(e.Time, val)
+
+					// Calculate initial scroll amount from press to current
+					scrollDelta = int(math.Round(float64(initialVal))) - s.last
 				}
 			} else {
+				val := s.val(s.scrollAxis, e.Position)
+				s.estimator.Sample(e.Time, val)
+
+				v := int(math.Round(float64(val)))
+				scrollDelta = s.last - v
 				s.last = v
-				total += dist
 			}
+
+			total += scrollDelta
 		}
 	}
+
 	total += s.flinger.Tick(t)
-	if s.flinger.Active() {
+	if s.flinger.Active() || (s.dragging && s.axisLocked) {
 		q.Execute(op.InvalidateCmd{})
 	}
+
 	return total
 }
 
