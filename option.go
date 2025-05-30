@@ -62,7 +62,6 @@ func WithLineHeight(lineHeight unit.Sp, lineHeightScale float32) EditorOption {
 	}
 }
 
-
 // WithTabWidth set how many spaces to represent a tab character. In the case of
 // soft tab, this determines the number of space characters to insert into the editor.
 // While for hard tab, this controls the maximum width of the 'tab' glyph to expand to.
@@ -129,6 +128,14 @@ func WrapLine(enabled bool) EditorOption {
 		if changed {
 			e.text.invalidate()
 		}
+	}
+}
+
+// WithLineNumber configures whether to show line number or not.
+func WithLineNumber(enabled bool) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.showLineNumber = enabled
 	}
 }
 
