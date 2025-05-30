@@ -31,8 +31,8 @@ func TestLineSplit(t *testing.T) {
 	doc := "Hello,world"
 
 	scheme := &ColorScheme{}
-	scheme.AddTokenType("t1", Bold|Underline, color.Color{}, color.Color{})
-	scheme.AddTokenType("t2", Bold, color.Color{}, color.Color{})
+	scheme.AddStyle("t1", Bold|Underline, color.Color{}, color.Color{})
+	scheme.AddStyle("t2", Bold, color.Color{}, color.Color{})
 	line := layoutText(doc)
 
 	testcases := []struct {
@@ -48,19 +48,19 @@ func TestLineSplit(t *testing.T) {
 		},
 		// unstyled text between tokens.
 		{
-			tokens:   []Token{{TokenType: "t1", Start: 0, End: 5}, {TokenType: "t1", Start: 6, End: 11}},
+			tokens:   []Token{{Scope: "t1", Start: 0, End: 5}, {Scope: "t1", Start: 6, End: 11}},
 			wantSize: 3,
 			wantLen:  []int{5, 1, 5},
 		},
 		// continuous tokens with no gapped text.
 		{
-			tokens:   []Token{{TokenType: "t1", Start: 0, End: 5}, {TokenType: "t1", Start: 5, End: 11}},
+			tokens:   []Token{{Scope: "t1", Start: 0, End: 5}, {Scope: "t1", Start: 5, End: 11}},
 			wantSize: 2,
 			wantLen:  []int{5, 6},
 		},
 		// unstyled leading and trailing text.
 		{
-			tokens:   []Token{{TokenType: "t1", Start: 2, End: 5}},
+			tokens:   []Token{{Scope: "t1", Start: 2, End: 5}},
 			wantSize: 3,
 			wantLen:  []int{2, 3, 6},
 		},

@@ -11,8 +11,8 @@ import (
 type Token struct {
 	// offset of the start rune in the document.
 	Start, End int
-	// Token type registered in the color scheme.
-	TokenType string
+	// Scope registered in the color scheme.
+	Scope StyleScope
 }
 
 type TextTokens struct {
@@ -37,12 +37,12 @@ func (t *TextTokens) Clear() {
 func (t *TextTokens) Set(tokens ...Token) {
 	t.Clear()
 	for _, token := range tokens {
-		t.add(token.TokenType, token.Start, token.End)
+		t.add(token.Scope, token.Start, token.End)
 	}
 }
 
-func (t *TextTokens) add(tokenType string, start, end int) {
-	style := t.colorScheme.GetTokenStyle(tokenType)
+func (t *TextTokens) add(scope StyleScope, start, end int) {
+	style := t.colorScheme.GetTokenStyle(scope)
 	if style == 0 {
 		return
 	}

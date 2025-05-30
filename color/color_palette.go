@@ -59,6 +59,11 @@ func (c Color) IsSet() bool {
 	return c.val != 0
 }
 
+func (c Color) String() string {
+	rgba := c.NRGBA()
+	return fmt.Sprintf("Color[R: %d, G: %d, B: %d, A: %d]", rgba.R, rgba.G, rgba.B, rgba.A)
+}
+
 // Hex2Color converts a non-alpha-premultiplied hexadecimal color string to Color.
 // The hexadecimal color can be in RGB or RGBA format. A "#" prefix is also allowed.
 //
