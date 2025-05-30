@@ -72,14 +72,12 @@ func (rb *lineSplitter) Split(line *layout.Line, textTokens *TextTokens, runs *[
 
 			fg := textTokens.GetColor(token.Style.Foreground())
 			bg := textTokens.GetColor(token.Style.Background())
-			if fg != nil && fg.IsSet() {
+			if fg.IsSet() {
 				rb.current.Fg = fg.Op(nil)
 			}
-			if bg != nil && bg.IsSet() {
+			if bg.IsSet() {
 				rb.current.Bg = bg.Op(nil)
 			}
-
-			//log.Println("run fg and bg: ", fg.NRGBA(), bg.NRGBA(), token.Style.Foreground(), token.Style.Background())
 
 			textStyle := token.Style.TextStyle()
 			if textStyle.HasStyle(Underline) {

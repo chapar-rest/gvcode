@@ -33,8 +33,8 @@ func (e *Editor) ClearDecorations(source string) {
 
 func (e *Editor) SetSyntaxTokens(tokens ...syntax.Token) {
 	e.initBuffer()
-	if e.colorScheme == nil {
-		slog.Info("No color scheme configured.")
+	if e.colorPalette == nil {
+		slog.Info("No color palette configured.")
 		return
 	}
 	e.text.syntaxStyles.Set(tokens...)

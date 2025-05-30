@@ -1,7 +1,6 @@
 package syntax
 
 import (
-	"log/slog"
 	"slices"
 	"strings"
 
@@ -72,11 +71,6 @@ const (
 type ColorScheme struct {
 	// Name is the name of the color scheme.
 	Name string
-	// Foreground provides a default text color for the editor.
-	Foreground color.Color
-	// Background provides a default text color for the editor.
-	Background color.Color
-
 	color.ColorPalette
 	// scopes are registered style scopes for the color scheme.
 	// It can be mapped to captures for Tree-Sitter, and TokenType of Chroma.
@@ -157,7 +151,6 @@ func (cs *ColorScheme) GetStyleByID(scopeID int) StyleMeta {
 func (cs *ColorScheme) GetTokenStyle(scope StyleScope) StyleMeta {
 	var style *scopeStyleRaw
 	var scopeID int = -1
-	raw := scope
 	for {
 		if !scope.IsValid() {
 			break
@@ -174,9 +167,7 @@ func (cs *ColorScheme) GetTokenStyle(scope StyleScope) StyleMeta {
 	}
 
 	if scopeID < 0 || style == nil {
-		// return StyleMeta(0)
 		style, scopeID := cs.getTokenStyle(defaultScope)
-		slog.Info("GetTokenStyle - NOT FOUND", "scope", raw, "return", style)
 		return packTokenStyle(scopeID, style.fg, style.bg, style.textStyle)
 	}
 

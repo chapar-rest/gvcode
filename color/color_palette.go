@@ -108,14 +108,25 @@ func parseHexByte(hexStr string) (uint8, error) {
 // ColorPalette manages used color of TextPainter. Color is added and referenced by its
 // ID(index) in the palette.
 type ColorPalette struct {
-	colors []*Color
+	// Foreground provides a default text color for the editor.
+	Foreground Color
+	// Background provides a default text color for the editor.
+	Background Color
+	// Color used to highlight the selections.
+	SelectColor Color
+	// Color used to highlight the current paragraph.
+	LineColor Color
+	// Color used to paint the line number
+	LineNumberColor Color
+	// Other colors.
+	colors []Color
 }
 
 // GetColor retrieves a Color by its ID. ID can be acquired when adding the color to
 // the palette.
-func (p *ColorPalette) GetColor(id int) *Color {
+func (p *ColorPalette) GetColor(id int) Color {
 	if id < 0 || id >= len(p.colors) {
-		return nil
+		return Color{}
 	}
 
 	return p.colors[id]
@@ -123,11 +134,11 @@ func (p *ColorPalette) GetColor(id int) *Color {
 
 // AddColor adds a color to the palette and return its id(index).
 func (p *ColorPalette) AddColor(cl Color) int {
-	if idx := slices.IndexFunc(p.colors, func(c *Color) bool { return *c == cl }); idx >= 0 {
+	if idx := slices.IndexFunc(p.colors, func(c Color) bool { return c.val == cl.val }); idx >= 0 {
 		return idx
 	}
 
-	p.colors = append(p.colors, &cl)
+	p.colors = append(p.colors, cl)
 	return len(p.colors) - 1
 }
 

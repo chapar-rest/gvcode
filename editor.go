@@ -21,29 +21,10 @@ import (
 	"github.com/oligo/gvcode/color"
 	"github.com/oligo/gvcode/internal/buffer"
 	"github.com/oligo/gvcode/internal/scroll"
-	"github.com/oligo/gvcode/textstyle/syntax"
 )
 
 // Editor implements an editable and scrollable text area.
 type Editor struct {
-	// LineNumberGutterGap specifies the right inset between the line number and the
-	// editor text area.
-	LineNumberGutterGap unit.Dp
-	// Color used to paint text. If there is a color scheme provided, the foreground
-	// and background from the color scheme is used to paint the text and the background
-	// of the editor.
-	TextMaterial color.Color
-	// Color used to highlight the selections.
-	SelectMaterial color.Color
-	// Color used to highlight the current paragraph.
-	LineMaterial color.Color
-	// Color used to paint the line number
-	LineNumberMaterial color.Color
-
-	// hooks
-	onPaste   BeforePasteHook
-	completor Completion
-
 	// readOnly controls whether the contents of the editor can be altered by
 	// user interaction. If set to true, the editor will allow selecting text
 	// and copying it interactively, but not modifying it.
@@ -54,9 +35,14 @@ type Editor struct {
 	text   textView
 	buffer buffer.TextSource
 
-	// colorScheme configures the color scheme used for syntax highlighting.
-	colorScheme *syntax.ColorScheme
-
+	// colorPalette configures the color scheme used for syntax highlighting.
+	colorPalette *color.ColorPalette
+	// LineNumberGutterGap specifies the right inset between the line number and the
+	// editor text area.
+	lineNumberGutterGap unit.Dp
+	// hooks
+	onPaste   BeforePasteHook
+	completor Completion
 	// scratch is a byte buffer that is reused to efficiently read portions of text
 	// from the textView.
 	scratch    []byte
@@ -179,8 +165,8 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 
 	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
 	e.scroller.Add(gtx.Ops)
-	if e.colorScheme != nil && e.colorScheme.Background.IsSet() {
-		e.colorScheme.Background.Op(nil).Add(gtx.Ops)
+	if e.colorPalette != nil && e.colorPalette.Background.IsSet() {
+		e.colorPalette.Background.Op(nil).Add(gtx.Ops)
 		paint.PaintOp{}.Add(gtx.Ops)
 	}
 
@@ -188,9 +174,15 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 		Axis: layout.Horizontal,
 	}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			dims := layout.Inset{Right: e.LineNumberGutterGap}.Layout(gtx,
+			dims := layout.Inset{Right: max(0, e.lineNumberGutterGap)}.Layout(gtx,
 				func(gtx layout.Context) layout.Dimensions {
-					return e.text.PaintLineNumber(gtx, lt, e.LineNumberMaterial.Op(gtx.Ops))
+					var lineNumberColor color.Color
+					if e.colorPalette.LineNumberColor.IsSet() {
+						lineNumberColor = e.colorPalette.LineNumberColor
+					} else {
+						lineNumberColor = color.Color{}.MulAlpha(255)
+					}
+					return e.text.PaintLineNumber(gtx, lt, lineNumberColor.Op(gtx.Ops))
 				})
 			e.gutterWidth = dims.Size.X
 			return dims
@@ -229,19 +221,36 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 		e.showCaret = !blinking || dt%timePerBlink < timePerBlink/2
 	}
 	semantic.Editor.Add(gtx.Ops)
-	if e.Len() > 0 {
-		e.paintSelection(gtx, e.SelectMaterial)
-		e.paintLineHighlight(gtx, e.LineMaterial)
-		e.text.highlightMatchingBrackets(gtx, e.SelectMaterial.Op(gtx.Ops))
 
-		textMaterial := e.TextMaterial
-		if e.colorScheme != nil && e.colorScheme.Foreground.IsSet() {
-			textMaterial = e.colorScheme.Foreground
-		}
+	// determine the various colors to use.
+	if e.colorPalette == nil {
+		panic("No color palette is set!")
+	}
+	
+	textMaterial := color.Color{}
+	var selectColor, lineColor color.Color
+	if e.colorPalette.Foreground.IsSet() {
+		textMaterial = e.colorPalette.Foreground
+	}
+	if e.colorPalette.SelectColor.IsSet() {
+		selectColor = e.colorPalette.SelectColor
+	} else {
+		selectColor = textMaterial.MulAlpha(0x60)
+	}
+	if e.colorPalette.LineColor.IsSet() {
+		lineColor = e.colorPalette.LineColor
+	} else {
+		lineColor = textMaterial.MulAlpha(0x30)
+	}
+
+	if e.Len() > 0 {
+		e.paintSelection(gtx, selectColor)
+		e.paintLineHighlight(gtx, lineColor)
+		e.text.highlightMatchingBrackets(gtx, selectColor.Op(gtx.Ops))
 		e.paintText(gtx, textMaterial)
 	}
 	if gtx.Enabled() {
-		e.paintCaret(gtx, e.TextMaterial)
+		e.paintCaret(gtx, textMaterial)
 	}
 	return layout.Dimensions{Size: gtx.Constraints.Max}
 }
@@ -675,6 +684,10 @@ func (e *Editor) TabStyle() (TabStyle, int) {
 	}
 
 	return Tabs, e.text.TabWidth
+}
+
+func (e *Editor) ColorPalette() *color.ColorPalette {
+	return e.colorPalette
 }
 
 // SetDebug enable or disable the debug mode.

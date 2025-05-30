@@ -54,7 +54,7 @@ func (t *TextTokens) add(scope StyleScope, start, end int) {
 	})
 }
 
-func (t *TextTokens) GetColor(colorID int) *color.Color {
+func (t *TextTokens) GetColor(colorID int) color.Color {
 	return t.colorScheme.GetColor(colorID)
 }
 

@@ -17,6 +17,8 @@ func (e *Editor) WithOptions(opts ...EditorOption) {
 	}
 }
 
+// Deprecated: Use the dedicated EditorOptions to set each of the options instead.
+//
 // WithShaperParams set the basic shaping params for the editor.
 func WithShaperParams(font font.Font, textSize unit.Sp, alignment text.Alignment, lineHeight unit.Sp, lineHeightScale float32) EditorOption {
 	return func(e *Editor) {
@@ -28,6 +30,38 @@ func WithShaperParams(font font.Font, textSize unit.Sp, alignment text.Alignment
 		e.text.LineHeightScale = lineHeightScale
 	}
 }
+
+// Set font to use for the editor.
+func WithFont(font font.Font) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.text.Font = font
+	}
+}
+
+// Set size of the text.
+func WithTextSize(textSize unit.Sp) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.text.TextSize = textSize
+	}
+}
+
+func WithTextAlignment(align text.Alignment) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.text.Alignment = align
+	}
+}
+
+func WithLineHeight(lineHeight unit.Sp, lineHeightScale float32) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.text.LineHeight = lineHeight
+		e.text.LineHeightScale = lineHeightScale
+	}
+}
+
 
 // WithTabWidth set how many spaces to represent a tab character. In the case of
 // soft tab, this determines the number of space characters to insert into the editor.
@@ -98,6 +132,13 @@ func WrapLine(enabled bool) EditorOption {
 	}
 }
 
+func WithLineNumberGutterGap(gap unit.Dp) EditorOption {
+	return func(e *Editor) {
+		e.initBuffer()
+		e.lineNumberGutterGap = gap
+	}
+}
+
 func WithAutoCompletion(completor Completion) EditorOption {
 	return func(e *Editor) {
 		e.initBuffer()
@@ -111,7 +152,7 @@ func WithAutoCompletion(completor Completion) EditorOption {
 func WithColorScheme(scheme syntax.ColorScheme) EditorOption {
 	return func(e *Editor) {
 		e.initBuffer()
-		e.colorScheme = &scheme
+		e.colorPalette = &scheme.ColorPalette
 		e.text.syntaxStyles = syntax.NewTextTokens(&scheme)
 	}
 }

@@ -87,32 +87,23 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 	return layout.Flex{
 		Axis: layout.Vertical,
 	}.Layout(gtx,
-		layout.Rigid(func(gtx C) D {
-			lb := material.Label(th, th.TextSize, "gvcode editor")
-			lb.Alignment = text.Middle
-			return lb.Layout(gtx)
-		}),
-		layout.Rigid(layout.Spacer{Height: unit.Dp(6)}.Layout),
 		layout.Flexed(1, func(gtx C) D {
-			borderColor := th.Fg
-			borderColor.A = 0xb6
 			return layout.Inset{
-				Top:    unit.Dp(6),
-				Bottom: unit.Dp(6),
-				Left:   unit.Dp(6),
-				Right:  unit.Dp(6),
+				Top:   unit.Dp(2),
+				Left:  unit.Dp(6),
+				Right: unit.Dp(6),
 			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{
 					Axis: layout.Horizontal,
 				}.Layout(gtx,
 					layout.Flexed(1.0, func(gtx layout.Context) layout.Dimensions {
-						es := wg.NewEditor(th, ed.state)
-						es.Font.Typeface = "monospace"
-						es.Font.Weight = font.SemiBold
-						es.TextSize = unit.Sp(14)
-						es.LineHeightScale = 1.5
+						ed.state.WithOptions(
+							gvcode.WithFont(font.Font{Typeface: "monospace", Weight: font.SemiBold}),
+							gvcode.WithTextSize(unit.Sp(12)),
+							gvcode.WithLineHeight(0, 1.5),
+						)
 
-						dims := es.Layout(gtx)
+						dims := ed.state.Layout(gtx, th.Shaper)
 
 						macro := op.Record(gtx.Ops)
 						scrollbarDims := func(gtx C) D {
@@ -142,10 +133,17 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 			})
 		}),
 		layout.Rigid(func(gtx C) D {
-			line, col := ed.state.CaretPos()
-			lb := material.Label(th, th.TextSize*0.8, fmt.Sprintf("Line:%d, Col:%d", line+1, col+1))
-			lb.Alignment = text.End
-			return lb.Layout(gtx)
+			return layout.Inset{
+				Right:  unit.Dp(8),
+				Top:    unit.Dp(2),
+				Bottom: unit.Dp(2),
+			}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				line, col := ed.state.CaretPos()
+				lb := material.Label(th, th.TextSize*0.7, fmt.Sprintf("Line:%d, Col:%d", line+1, col+1))
+				lb.Alignment = text.End
+				lb.Color = ed.state.ColorPalette().Foreground.NRGBA()
+				return lb.Layout(gtx)
+			})
 		}),
 	)
 
@@ -164,18 +162,15 @@ func makeScrollbar(th *material.Theme, scroll *widget.Scrollbar, color color.NRG
 func main() {
 	log.SetFlags(log.Flags() | log.Lshortfile)
 	th := material.NewTheme()
-	th.ContrastBg = color.NRGBA{R: 40, G: 204, B: 187, A: 255}
-	//th.Bg = color.NRGBA{R: 32, G: 26, B: 16, A: 255}
-	//th.Fg = color.NRGBA{R: 255, G: 255, B: 250, A: 255}
 
 	editorApp := EditorApp{
 		window: &app.Window{},
 		th:     th,
 	}
-	editorApp.window.Option(app.Title("gvcode feature demo"))
+	editorApp.window.Option(app.Title("gvcode demo"))
 
 	gvcode.SetDebug(false)
-	editorApp.state = &gvcode.Editor{}
+	editorApp.state = wg.NewEditor(th)
 
 	thisFile, _ := os.ReadFile("./main.go")
 	editorApp.state.SetText(string(thisFile))
@@ -192,10 +187,12 @@ func main() {
 
 	// color scheme
 	colorScheme := syntax.ColorScheme{}
-	//colorScheme.Background = gvcolor.MakeColor(color.NRGBA{R: 32, G: 26, B: 16, A: 255})
-	//colorScheme.Foreground = gvcolor.MakeColor(color.NRGBA{R: 255, G: 255, B: 250, A: 255})
+	colorScheme.Foreground = gvcolor.MakeColor(th.Fg)
+	colorScheme.SelectColor = gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x60)
+	colorScheme.LineColor = gvcolor.MakeColor(th.ContrastBg).MulAlpha(0x30)
+	colorScheme.LineNumberColor = gvcolor.MakeColor(th.ContrastBg).MulAlpha(0xb6)
 	keywordColor, _ := gvcolor.Hex2Color("#AF00DB")
-	colorScheme.AddTokenType("keyword", syntax.Underline, keywordColor, gvcolor.Color{})
+	colorScheme.AddStyle("keyword", syntax.Underline, keywordColor, gvcolor.Color{})
 
 	editorApp.state.WithOptions(
 		gvcode.WrapLine(false),
@@ -237,9 +234,9 @@ func HightlightTextByPattern(text string, pattern string) []syntax.Token {
 	matches := re.FindAllIndex([]byte(text), -1)
 	for _, match := range matches {
 		tokens = append(tokens, syntax.Token{
-			Start:     match[0],
-			End:       match[1],
-			TokenType: "keyword",
+			Start: match[0],
+			End:   match[1],
+			Scope: "keyword",
 		})
 	}
 
