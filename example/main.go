@@ -196,6 +196,7 @@ func main() {
 
 	editorApp.state.WithOptions(
 		gvcode.WrapLine(false),
+		gvcode.WithLineNumber(true),
 		gvcode.WithAutoCompletion(cm),
 		gvcode.WithColorScheme(colorScheme),
 	)

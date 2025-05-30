@@ -40,6 +40,7 @@ type Editor struct {
 	// LineNumberGutterGap specifies the right inset between the line number and the
 	// editor text area.
 	lineNumberGutterGap unit.Dp
+	showLineNumber      bool
 	// hooks
 	onPaste   BeforePasteHook
 	completor Completion
@@ -174,6 +175,10 @@ func (e *Editor) Layout(gtx layout.Context, lt *text.Shaper) layout.Dimensions {
 		Axis: layout.Horizontal,
 	}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if !e.showLineNumber {
+				return layout.Dimensions{}
+			}
+
 			dims := layout.Inset{Right: max(0, e.lineNumberGutterGap)}.Layout(gtx,
 				func(gtx layout.Context) layout.Dimensions {
 					var lineNumberColor color.Color
@@ -226,7 +231,7 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 	if e.colorPalette == nil {
 		panic("No color palette is set!")
 	}
-	
+
 	textMaterial := color.Color{}
 	var selectColor, lineColor color.Color
 	if e.colorPalette.Foreground.IsSet() {
