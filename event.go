@@ -14,6 +14,7 @@ import (
 	"gioui.org/io/transfer"
 	"gioui.org/layout"
 	"github.com/oligo/gvcode/internal/scroll"
+	"github.com/oligo/gvcode/textview"
 )
 
 func (e *Editor) processEvents(gtx layout.Context) (ev EditorEvent, ok bool) {
@@ -59,7 +60,7 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 	scrollY.Min = -scrollOffY
 	scrollY.Max = max(0, textDims.Size.Y-(scrollOffY+visibleDims.Size.Y))
 	sbounds := e.text.ScrollBounds()
-	
+
 	var soff, smin, smax int
 	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, scrollX, scrollY)
 	if e.scroller.Direction() == scroll.Horizontal {
@@ -134,12 +135,12 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 			// Process multi-clicks.
 			switch {
 			case evt.NumClicks == 2:
-				e.text.MoveWords(-1, selectionClear)
-				e.text.MoveWords(1, selectionExtend)
+				e.text.MoveWords(-1, textview.SelectionClear)
+				e.text.MoveWords(1, textview.SelectionExtend)
 				e.dragging = false
 			case evt.NumClicks >= 3:
-				e.text.MoveLineStart(selectionClear)
-				e.text.MoveLineEnd(selectionExtend)
+				e.text.MoveLineStart(textview.SelectionClear)
+				e.text.MoveLineEnd(textview.SelectionExtend)
 				e.dragging = false
 			}
 

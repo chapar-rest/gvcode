@@ -1,4 +1,4 @@
-package gvcode
+package textview
 
 import (
 	"image"

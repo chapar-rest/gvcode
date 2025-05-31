@@ -18,17 +18,12 @@ type TextRange struct {
 
 func (e *Editor) AddDecorations(styles ...decoration.Decoration) {
 	e.initBuffer()
-	e.text.decorations.Insert(styles...)
+	e.text.AddDecorations(styles...)
 }
 
 func (e *Editor) ClearDecorations(source string) {
 	e.initBuffer()
-
-	if source == "" {
-		e.text.decorations.RemoveAll()
-	} else {
-		e.text.decorations.RemoveBySource(source)
-	}
+	e.text.ClearDecorations(source)
 }
 
 func (e *Editor) SetSyntaxTokens(tokens ...syntax.Token) {
@@ -37,5 +32,5 @@ func (e *Editor) SetSyntaxTokens(tokens ...syntax.Token) {
 		slog.Info("No color palette configured.")
 		return
 	}
-	e.text.syntaxStyles.Set(tokens...)
+	e.text.SetSyntaxTokens(tokens...)
 }

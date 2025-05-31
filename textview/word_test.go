@@ -1,4 +1,4 @@
-package gvcode
+package textview
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestReadWord(t *testing.T) {
-	view := &textView{}
+	view := &TextView{}
 	view.SetSource(buffer.NewTextSource())
 
 	doc := "hello,world!!!"

@@ -1,4 +1,4 @@
-package gvcode
+package textview
 
 import (
 	"sort"
@@ -9,7 +9,7 @@ import (
 
 // find a paragraph by rune index, returning the line number(starting from zero)
 // and the paragraph itself.
-func (e *textView) FindParagraph(runeIdx int) (int, lt.Paragraph) {
+func (e *TextView) FindParagraph(runeIdx int) (int, lt.Paragraph) {
 	if len(e.layouter.Paragraphs) == 0 {
 		return 0, lt.Paragraph{}
 	}
@@ -29,7 +29,7 @@ func (e *textView) FindParagraph(runeIdx int) (int, lt.Paragraph) {
 
 // ConvertPos convert a line/col position to rune offset.
 // line is counted by paragrah, and col is counted by rune.
-func (e *textView) ConvertPos(line, col int) int {
+func (e *TextView) ConvertPos(line, col int) int {
 	if line < 0 {
 		return 0
 	}
@@ -47,7 +47,7 @@ func (e *textView) ConvertPos(line, col int) int {
 
 // selectedParagraphs returns the paragraphs that the carent selection covers.
 // If there's no selection, it returns the paragraph that the caret is in.
-func (e *textView) selectedParagraphs() []lt.Paragraph {
+func (e *TextView) selectedParagraphs() []lt.Paragraph {
 	if len(e.layouter.Paragraphs) <= 0 {
 		return nil
 	}
@@ -95,7 +95,7 @@ func (e *textView) selectedParagraphs() []lt.Paragraph {
 
 // SelectedLineRange returns the start and end rune index of the paragraphs selected by the caret.
 // If there is no selection, the range of current paragraph the caret is in is returned.
-func (e *textView) SelectedLineRange() (start, end int) {
+func (e *TextView) SelectedLineRange() (start, end int) {
 	paragraphs := e.selectedParagraphs()
 	if len(paragraphs) == 0 {
 		return
@@ -107,7 +107,7 @@ func (e *textView) SelectedLineRange() (start, end int) {
 
 // SelectedLine returns the text of the selected lines and the rune range. An empty selection is treated
 // as a single line selection.
-func (e *textView) SelectedLineText(buf []byte) ([]byte, int, int) {
+func (e *TextView) SelectedLineText(buf []byte) ([]byte, int, int) {
 	paragraphs := e.selectedParagraphs()
 	if len(paragraphs) == 0 {
 		return buf[:0], 0, 0
@@ -128,7 +128,7 @@ func (e *textView) SelectedLineText(buf []byte) ([]byte, int, int) {
 }
 
 // partialLineSelected checks if the current selection is a partial single line.
-func (e *textView) PartialLineSelected() bool {
+func (e *TextView) PartialLineSelected() bool {
 	if e.caret.start == e.caret.end {
 		return false
 	}
@@ -162,7 +162,7 @@ func (e *textView) PartialLineSelected() bool {
 // If s is a single tab character and the editor is configured to use soft tab,
 // the tab is expanded with spaces, also tab stop is accounted when calculating
 // space number.
-func (e *textView) expandTab(start, end int, s string) string {
+func (e *TextView) expandTab(start, end int, s string) string {
 	if !e.SoftTab || s != "\t" {
 		return s
 	}
@@ -184,7 +184,7 @@ func (e *textView) expandTab(start, end int, s string) string {
 }
 
 // Indentation returns the text sequence used to indent the lines(paragraphs).
-func (e *textView) Indentation() string {
+func (e *TextView) Indentation() string {
 	indentation := "\t"
 	if e.SoftTab {
 		indentation = strings.Repeat(" ", e.TabWidth)

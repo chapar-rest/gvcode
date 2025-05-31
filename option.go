@@ -123,11 +123,7 @@ func ReadOnlyMode(enabled bool) EditorOption {
 func WrapLine(enabled bool) EditorOption {
 	return func(e *Editor) {
 		e.initBuffer()
-		changed := e.text.WrapLine == enabled
-		e.text.WrapLine = enabled
-		if changed {
-			e.text.invalidate()
-		}
+		e.text.SetWrapLine(enabled)
 	}
 }
 
@@ -160,7 +156,7 @@ func WithColorScheme(scheme syntax.ColorScheme) EditorOption {
 	return func(e *Editor) {
 		e.initBuffer()
 		e.colorPalette = &scheme.ColorPalette
-		e.text.syntaxStyles = syntax.NewTextTokens(&scheme)
+		e.text.SetColorScheme(&scheme)
 	}
 }
 

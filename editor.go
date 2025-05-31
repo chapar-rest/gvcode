@@ -21,6 +21,7 @@ import (
 	"github.com/oligo/gvcode/color"
 	"github.com/oligo/gvcode/internal/buffer"
 	"github.com/oligo/gvcode/internal/scroll"
+	"github.com/oligo/gvcode/textview"
 )
 
 // Editor implements an editable and scrollable text area.
@@ -32,7 +33,7 @@ type Editor struct {
 
 	// text manages the text buffer and provides shaping and cursor positioning
 	// services.
-	text   textView
+	text   textview.TextView
 	buffer buffer.TextSource
 
 	// colorPalette configures the color scheme used for syntax highlighting.
@@ -79,13 +80,6 @@ type imeState struct {
 	snippet    key.Snippet
 	start, end int
 }
-
-type selectionAction int
-
-const (
-	selectionExtend selectionAction = iota
-	selectionClear
-)
 
 type EditorEvent interface {
 	isEditorEvent()
@@ -251,7 +245,7 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 	if e.Len() > 0 {
 		e.paintSelection(gtx, selectColor)
 		e.paintLineHighlight(gtx, lineColor)
-		e.text.highlightMatchingBrackets(gtx, selectColor.Op(gtx.Ops))
+		e.text.HighlightMatchingBrackets(gtx, selectColor.Op(gtx.Ops))
 		e.paintText(gtx, textMaterial)
 	}
 	if gtx.Enabled() {
@@ -286,7 +280,7 @@ func (e *Editor) paintCaret(gtx layout.Context, material color.Color) {
 
 func (e *Editor) paintLineHighlight(gtx layout.Context, material color.Color) {
 	e.initBuffer()
-	e.text.paintLineHighlight(gtx, material.Op(gtx.Ops))
+	e.text.PaintLineHighlight(gtx, material.Op(gtx.Ops))
 }
 
 // Len is the length of the editor contents, in runes.
@@ -301,7 +295,7 @@ func (e *Editor) Len() int {
 func (e *Editor) Text() string {
 	e.initBuffer()
 
-	srcReader := buffer.NewReader(e.text.src)
+	srcReader := buffer.NewReader(e.text.Source())
 	e.scratch = srcReader.ReadAll(e.scratch)
 	return string(e.scratch)
 }
@@ -310,7 +304,7 @@ func (e *Editor) Text() string {
 // is the preferred way to read from the editor, especially when reading from
 // multiple goroutines.
 func (e *Editor) GetReader() io.ReadSeeker {
-	return buffer.NewReader(e.text.src)
+	return buffer.NewReader(e.text.Source())
 }
 
 func (e *Editor) SetText(s string) {
@@ -600,9 +594,9 @@ func (e *Editor) deleteWord(distance int) (deletedRunes int) {
 	runes := 1
 	for ii := 0; ii < words; ii++ {
 		r := next(runes)
-		isSeperator := e.text.isWordSeperator(r)
+		isSeperator := e.text.IsWordSeperator(r)
 
-		for r := next(runes); (isSeperator == e.text.isWordSeperator(r)) && !atEnd(runes); r = next(runes) {
+		for r := next(runes); (isSeperator == e.text.IsWordSeperator(r)) && !atEnd(runes); r = next(runes) {
 			runes += 1
 		}
 	}

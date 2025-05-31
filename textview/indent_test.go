@@ -1,4 +1,4 @@
-package gvcode
+package textview
 
 import (
 	"fmt"
@@ -11,8 +11,8 @@ import (
 )
 
 func TestIndentLines(t *testing.T) {
-	setup := func(input string, selection []int) *textView {
-		vw := &textView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
+	setup := func(input string, selection []int) *TextView {
+		vw := &TextView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
 		vw.SetSource(buffer.NewTextSource())
 		vw.SetText(input)
 
@@ -106,7 +106,7 @@ func TestIndentLines(t *testing.T) {
 }
 
 func TestDedentLine(t *testing.T) {
-	text := &textView{}
+	text := &TextView{}
 	text.SetSource(buffer.NewTextSource())
 	text.TabWidth = 4
 
@@ -154,8 +154,8 @@ func TestDedentLine(t *testing.T) {
 }
 
 func TestIndentOnBreak(t *testing.T) {
-	setup := func(input string, selection int) *textView {
-		vw := &textView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
+	setup := func(input string, selection int) *TextView {
+		vw := &TextView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
 		vw.SetSource(buffer.NewTextSource())
 		vw.SetText(input)
 

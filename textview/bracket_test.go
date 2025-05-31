@@ -1,4 +1,4 @@
-package gvcode
+package textview
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestNearestMatchingBrackets(t *testing.T) {
-	view := &textView{}
+	view := &TextView{}
 	view.SetSource(buffer.NewTextSource())
 	gtx := layout.Context{}
 	shaper := text.NewShaper()

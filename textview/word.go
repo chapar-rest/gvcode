@@ -1,4 +1,4 @@
-package gvcode
+package textview
 
 import (
 	"slices"
@@ -12,10 +12,10 @@ const (
 	defaultWordSeperators = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?"
 )
 
-// isWordSeperator check r to see if it is a word seperator. A word seperator
+// IsWordSeperator check r to see if it is a word seperator. A word seperator
 // set the boundary when navigating by words, or deleting by words.
 // TODO: does it make sence to use unicode space definition here?
-func (e *textView) isWordSeperator(r rune) bool {
+func (e *TextView) IsWordSeperator(r rune) bool {
 	seperators := e.WordSeperators
 
 	if e.WordSeperators == "" {
@@ -29,7 +29,7 @@ func (e *textView) isWordSeperator(r rune) bool {
 // MoveWord moves the caret to the next few words in the specified direction.
 // Positive is forward, negative is backward.
 // The final caret position will be aligned to a grapheme cluster boundary.
-func (e *textView) MoveWords(distance int, selAct selectionAction) {
+func (e *TextView) MoveWords(distance int, selAct SelectionAction) {
 	// split the distance information into constituent parts to be
 	// used independently.
 	words, direction := distance, 1
@@ -51,13 +51,13 @@ func (e *textView) MoveWords(distance int, selAct selectionAction) {
 		return r
 	}
 	for ii := 0; ii < words; ii++ {
-		for r := next(); e.isWordSeperator(r) && !atEnd(); r = next() {
+		for r := next(); e.IsWordSeperator(r) && !atEnd(); r = next() {
 			e.MoveCaret(direction, 0)
 			caret = e.closestToRune(e.caret.start)
 		}
 		e.MoveCaret(direction, 0)
 		caret = e.closestToRune(e.caret.start)
-		for r := next(); !e.isWordSeperator(r) && !atEnd(); r = next() {
+		for r := next(); !e.IsWordSeperator(r) && !atEnd(); r = next() {
 			e.MoveCaret(direction, 0)
 			caret = e.closestToRune(e.caret.start)
 		}
@@ -68,7 +68,7 @@ func (e *textView) MoveWords(distance int, selAct selectionAction) {
 
 // readBySeperator reads in the specified direction from caretOff until the seperator returns false.
 // It returns the read text.
-func (e *textView) readBySeperator(direction int, caretOff int, seperator func(r rune) bool) []rune {
+func (e *TextView) readBySeperator(direction int, caretOff int, seperator func(r rune) bool) []rune {
 	buf := make([]rune, 0)
 	for {
 		if caretOff < 0 || caretOff > e.src.Len() {
@@ -96,7 +96,7 @@ func (e *textView) readBySeperator(direction int, caretOff int, seperator func(r
 // and the offset of the caret in the word.
 //
 // The word boundary is checked using the word boundary characters or just spaces.
-func (e *textView) ReadWord(bySpace bool) (string, int) {
+func (e *TextView) ReadWord(bySpace bool) (string, int) {
 	caret := max(e.caret.start, e.caret.end)
 	buf := make([]rune, 0)
 
@@ -104,7 +104,7 @@ func (e *textView) ReadWord(bySpace bool) (string, int) {
 		if bySpace {
 			return unicode.IsSpace(r)
 		}
-		return e.isWordSeperator(r)
+		return e.IsWordSeperator(r)
 	}
 
 	left := e.readBySeperator(-1, caret-1, seperator)
@@ -117,7 +117,7 @@ func (e *textView) ReadWord(bySpace bool) (string, int) {
 
 // ReadUntil reads in the specified direction from the current caret position until the
 // seperator returns false. It returns the read text.
-func (e *textView) ReadUntil(direction int, seperator func(r rune) bool) string {
+func (e *TextView) ReadUntil(direction int, seperator func(r rune) bool) string {
 	caret := max(e.caret.start, e.caret.end)
 	var buf []rune
 

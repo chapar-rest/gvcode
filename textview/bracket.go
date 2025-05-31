@@ -1,4 +1,4 @@
-package gvcode
+package textview
 
 import (
 	"maps"
@@ -170,7 +170,7 @@ func (bq *bracketsQuotes) GetClosingQuote(r rune) (rune, bool) {
 }
 
 // NearestMatchingBrackets finds the nearest matching brackets of the caret.
-func (e *textView) NearestMatchingBrackets() (left int, right int) {
+func (e *TextView) NearestMatchingBrackets() (left int, right int) {
 	left, right = -1, -1
 	start, end := e.Selection()
 	if start != end {
