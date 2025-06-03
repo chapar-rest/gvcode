@@ -104,9 +104,15 @@ type TextView struct {
 	lineBuf []byte
 }
 
+func NewTextView() *TextView {
+	e := TextView{}
+	e.setSource(buffer.NewTextSource())
+	return &e
+}
+
 // SetSource initializes the underlying data source for the Text. This
 // must be done before invoking any other methods on Text.
-func (e *TextView) SetSource(source buffer.TextSource) {
+func (e *TextView) setSource(source buffer.TextSource) {
 	e.src = source
 	e.layouter = lt.NewTextLayout(e.src)
 	e.BracketsQuotes = &bracketsQuotes{}
@@ -123,7 +129,7 @@ func (e *TextView) Changed() bool {
 }
 
 func (e *TextView) SetWrapLine(enabled bool) {
-	changed := e.WrapLine == enabled
+	changed := e.WrapLine != enabled
 	e.WrapLine = enabled
 	if changed {
 		e.invalidate()
@@ -348,6 +354,16 @@ func (e *TextView) CaretPos() (line, col int) {
 func (e *TextView) CaretCoords() f32.Point {
 	pos := e.closestToRune(e.caret.start)
 	return f32.Pt(float32(pos.X)/64-float32(e.scrollOff.X), float32(pos.Y-e.scrollOff.Y))
+}
+
+// QueryPos querys the line/column and rune offset of the passed position.
+func (e *TextView) QueryPos(pos image.Point) (line, col int, runeOff int) {
+	x := fixed.I(pos.X + e.scrollOff.X)
+	y := pos.Y + e.scrollOff.Y
+	combinedPos := e.closestToXYGraphemes(x, y)
+
+	line, p := e.FindParagraph(combinedPos.Runes)
+	return line, combinedPos.Runes - p.RuneOff, combinedPos.Runes
 }
 
 // invalidate mark the layout as invalid.

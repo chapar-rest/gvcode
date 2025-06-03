@@ -12,8 +12,10 @@ import (
 
 func TestIndentLines(t *testing.T) {
 	setup := func(input string, selection []int) *TextView {
-		vw := &TextView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
-		vw.SetSource(buffer.NewTextSource())
+		vw := NewTextView()
+		vw.TabWidth = 4
+		vw.SoftTab = false
+		vw.TextSize = unit.Sp(14)
 		vw.SetText(input)
 
 		gtx := layout.Context{}
@@ -106,8 +108,7 @@ func TestIndentLines(t *testing.T) {
 }
 
 func TestDedentLine(t *testing.T) {
-	text := &TextView{}
-	text.SetSource(buffer.NewTextSource())
+	text := NewTextView()
 	text.TabWidth = 4
 
 	cases := []struct {
@@ -155,8 +156,10 @@ func TestDedentLine(t *testing.T) {
 
 func TestIndentOnBreak(t *testing.T) {
 	setup := func(input string, selection int) *TextView {
-		vw := &TextView{TabWidth: 4, SoftTab: false, TextSize: unit.Sp(14)}
-		vw.SetSource(buffer.NewTextSource())
+		vw := NewTextView()
+		vw.TabWidth = 4
+		vw.SoftTab = false
+		vw.TextSize = unit.Sp(14)
 		vw.SetText(input)
 
 		gtx := layout.Context{}

@@ -6,12 +6,10 @@ import (
 
 	"gioui.org/layout"
 	"gioui.org/text"
-	"github.com/oligo/gvcode/internal/buffer"
 )
 
 func TestNearestMatchingBrackets(t *testing.T) {
-	view := &TextView{}
-	view.SetSource(buffer.NewTextSource())
+	view := NewTextView()
 	gtx := layout.Context{}
 	shaper := text.NewShaper()
 

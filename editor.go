@@ -33,7 +33,7 @@ type Editor struct {
 
 	// text manages the text buffer and provides shaping and cursor positioning
 	// services.
-	text   textview.TextView
+	text   *textview.TextView
 	buffer buffer.TextSource
 
 	// colorPalette configures the color scheme used for syntax highlighting.
@@ -59,6 +59,7 @@ type Editor struct {
 	dragging    bool
 	dragger     gesture.Drag
 	scroller    scroll.Scroll
+	hover       scroll.Hover
 	scrollCaret bool
 	showCaret   bool
 	clicker     gesture.Click
@@ -96,6 +97,14 @@ type ChangeEvent struct{}
 // Editor.SelectedText() (which can be empty).
 type SelectEvent struct{}
 
+// A HoverEvent is generated if the pointer hovers and keep still or maybe some
+// small movement for some time.
+type HoverEvent struct {
+	PixelOff image.Point
+	Pos      Position
+	IsCancel bool
+}
+
 const (
 	blinksPerSecond  = 1
 	maxBlinkDuration = 10 * time.Second
@@ -106,8 +115,8 @@ const (
 // and has its fields synced with the editor.
 func (e *Editor) initBuffer() {
 	if e.buffer == nil {
-		e.buffer = buffer.NewTextSource()
-		e.text.SetSource(e.buffer)
+		e.text = textview.NewTextView()
+		e.buffer = e.text.Source()
 	}
 
 	e.text.CaretWidth = unit.Dp(1)
@@ -207,6 +216,7 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 
 	e.clicker.Add(gtx.Ops)
 	e.dragger.Add(gtx.Ops)
+	e.hover.Add(gtx.Ops)
 	e.showCaret = false
 	if gtx.Focused(e) {
 		now := gtx.Now
@@ -252,6 +262,12 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 		e.paintCaret(gtx, textMaterial)
 	}
 	return layout.Dimensions{Size: gtx.Constraints.Max}
+}
+
+// PaintOverlay draws a overlay widget over the main editor area.
+func (e *Editor) PaintOverlay(gtx layout.Context, position image.Point, w layout.Widget) {
+	offset := position.Add(e.text.ScrollOff())
+	e.text.PaintOverlay(gtx, offset, w)
 }
 
 // paintSelection paints the contrasting background for selected text using the provided
@@ -715,3 +731,4 @@ func sign(n int) int {
 
 func (s ChangeEvent) isEditorEvent() {}
 func (s SelectEvent) isEditorEvent() {}
+func (s HoverEvent) isEditorEvent()  {}

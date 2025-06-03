@@ -6,12 +6,10 @@ import (
 
 	"gioui.org/layout"
 	"gioui.org/text"
-	"github.com/oligo/gvcode/internal/buffer"
 )
 
 func TestReadWord(t *testing.T) {
-	view := &TextView{}
-	view.SetSource(buffer.NewTextSource())
+	view := NewTextView()
 
 	doc := "hello,world!!!"
 

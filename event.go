@@ -97,6 +97,19 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 	if (sdist > 0 && soff >= smax) || (sdist < 0 && soff <= smin) {
 		e.scroller.Stop()
 	}
+
+	// detects hover event.
+	hoverEvent, ok := e.hover.Update(gtx)
+	if ok {
+		switch hoverEvent.Kind {
+		case scroll.KindHovered:
+			line, col, runeOff := e.text.QueryPos(hoverEvent.Position)
+			return HoverEvent{PixelOff: hoverEvent.Position, Pos: Position{Line: line, Column: col, Runes: runeOff}}, ok
+		case scroll.KindCancelled:
+			return HoverEvent{IsCancel: true}, ok
+		}
+	}
+
 	return nil, false
 }
 
