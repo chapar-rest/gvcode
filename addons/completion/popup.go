@@ -167,7 +167,7 @@ func (pop *CompletionPopup) update(gtx layout.Context) {
 	// press ESC to cancel and close the popup
 	pop.editor.RegisterCommand(pop, key.Filter{Name: key.NameEscape},
 		func(gtx layout.Context, evt key.Event) gvcode.EditorEvent {
-			pop.reset()
+			pop.cmp.Cancel()
 			return nil
 		},
 	)
