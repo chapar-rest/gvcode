@@ -93,11 +93,19 @@ func (pop *CompletionPopup) updateSelection(direction int) {
 	pop.labels[pop.focused].selected = true
 	if direction > 0 {
 		scrolled := pop.list.Position.First + pop.list.Position.Count
+		if pop.list.Position.OffsetLast < 0 {
+			scrolled--
+		}
 		if scrolled <= pop.focused && scrolled+direction <= len(pop.labels) {
 			pop.list.ScrollBy(float32(direction))
 		}
 	} else {
-		if pop.list.Position.First > pop.focused {
+		scrolled := pop.list.Position.First
+		if pop.list.Position.Offset > 0 {
+			scrolled++
+		}
+
+		if scrolled > pop.focused {
 			pop.list.ScrollBy(float32(direction))
 		}
 	}
