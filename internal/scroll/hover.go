@@ -58,7 +58,7 @@ func (h *Hover) Update(gtx layout.Context) (HoverEvent, bool) {
 	for {
 		ev, ok := gtx.Event(pointer.Filter{
 			Target: h,
-			Kinds:  pointer.Enter | pointer.Move | pointer.Leave | pointer.Cancel,
+			Kinds:  pointer.Enter | pointer.Move | pointer.Press | pointer.Scroll | pointer.Leave | pointer.Cancel,
 		})
 		if !ok {
 			break
@@ -127,9 +127,23 @@ func (h *Hover) Update(gtx layout.Context) (HoverEvent, bool) {
 				hoverEvent = HoverEvent{Kind: KindHovered, Position: e.Position.Round()}
 				return hoverEvent, true
 			}
+		case pointer.Press, pointer.Scroll:
+			if !h.entered || h.pid != e.PointerID {
+				break
+			}
+
+			if h.isHovering {
+				h.isHovering = false
+				// Reset timer and start position so hover can re-trigger
+				// if the pointer becomes still again from this new position.
+				h.enteredAt = e.Time
+				h.startPos = e.Position
+				hoverEvent = HoverEvent{Kind: KindCancelled}
+			}
 
 		}
 	}
 
-	return hoverEvent, hoverEvent != HoverEvent{}
+	activated := hoverEvent != (HoverEvent{})
+	return hoverEvent, activated
 }
