@@ -357,12 +357,19 @@ func (e *TextView) CaretCoords() f32.Point {
 }
 
 // QueryPos querys the line/column and rune offset of the passed position.
+// If pos is outside of the line boundary, it returns zero line and col, and
+// a negative runeOff.
 func (e *TextView) QueryPos(pos image.Point) (line, col int, runeOff int) {
 	x := fixed.I(pos.X + e.scrollOff.X)
 	y := pos.Y + e.scrollOff.Y
 	combinedPos := e.closestToXYGraphemes(x, y)
 
 	line, p := e.FindParagraph(combinedPos.Runes)
+
+	if x < p.StartX || x > p.EndX {
+		return 0, 0, -1
+	}
+
 	return line, combinedPos.Runes - p.RuneOff, combinedPos.Runes
 }
 

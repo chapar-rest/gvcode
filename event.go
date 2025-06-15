@@ -13,7 +13,7 @@ import (
 	"gioui.org/io/pointer"
 	"gioui.org/io/transfer"
 	"gioui.org/layout"
-	"github.com/oligo/gvcode/internal/scroll"
+	gestureExt "github.com/oligo/gvcode/internal/gesture"
 	"github.com/oligo/gvcode/textview"
 )
 
@@ -63,7 +63,7 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 
 	var soff, smin, smax int
 	sdist := e.scroller.Update(gtx.Metric, gtx.Source, gtx.Now, scrollX, scrollY)
-	if e.scroller.Direction() == scroll.Horizontal {
+	if e.scroller.Direction() == gestureExt.Horizontal {
 		e.text.ScrollRel(sdist, 0)
 		soff = e.text.ScrollOff().X
 		smin, smax = sbounds.Min.X, sbounds.Max.X
@@ -102,10 +102,12 @@ func (e *Editor) processPointer(gtx layout.Context) (EditorEvent, bool) {
 	hoverEvent, ok := e.hover.Update(gtx)
 	if ok {
 		switch hoverEvent.Kind {
-		case scroll.KindHovered:
+		case gestureExt.KindHovered:
 			line, col, runeOff := e.text.QueryPos(hoverEvent.Position)
-			return HoverEvent{PixelOff: hoverEvent.Position, Pos: Position{Line: line, Column: col, Runes: runeOff}}, ok
-		case scroll.KindCancelled:
+			if runeOff >= 0 {
+				return HoverEvent{PixelOff: hoverEvent.Position, Pos: Position{Line: line, Column: col, Runes: runeOff}}, ok
+			}
+		case gestureExt.KindCancelled:
 			return HoverEvent{IsCancel: true}, ok
 		}
 	}
@@ -129,7 +131,7 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 			if !e.readOnly {
 				gtx.Execute(key.SoftKeyboardCmd{Show: true})
 			}
-			if e.scroller.State() != scroll.StateFlinging {
+			if e.scroller.State() != gestureExt.StateFlinging {
 				e.scrollCaret = true
 			}
 

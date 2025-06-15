@@ -12,7 +12,7 @@ import (
 	"gioui.org/io/pointer"
 	"gioui.org/op"
 	"gioui.org/unit"
-	"github.com/oligo/gvcode/internal/scroll/fling"
+	"github.com/oligo/gvcode/internal/gesture/fling"
 )
 
 // Scroll detects scroll gestures and reduces them to

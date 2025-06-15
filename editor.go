@@ -20,7 +20,7 @@ import (
 	"gioui.org/unit"
 	"github.com/oligo/gvcode/color"
 	"github.com/oligo/gvcode/internal/buffer"
-	"github.com/oligo/gvcode/internal/scroll"
+	gestureExt "github.com/oligo/gvcode/internal/gesture"
 	"github.com/oligo/gvcode/textview"
 )
 
@@ -58,8 +58,8 @@ type Editor struct {
 
 	dragging    bool
 	dragger     gesture.Drag
-	scroller    scroll.Scroll
-	hover       scroll.Hover
+	scroller    gestureExt.Scroll
+	hover       gestureExt.Hover
 	scrollCaret bool
 	showCaret   bool
 	clicker     gesture.Click
