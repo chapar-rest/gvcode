@@ -46,19 +46,24 @@ type RenderRun struct {
 
 // Bounds returns the bounding box relative to the dot of the first glyph of the run.
 func (s *RenderRun) Bounds() image.Rectangle {
-	rect := image.Rectangle{}
-
 	if len(s.Glyphs) == 0 {
-		return rect
+		return image.Rectangle{}
 	}
 
+	rect := fixed.Rectangle26_6{}
 	for _, g := range s.Glyphs {
-		rect.Min.Y = min(rect.Min.Y, -g.Ascent.Round())
-		rect.Max.Y = max(rect.Max.Y, g.Descent.Round())
-		rect.Max.X += g.Advance.Round()
+		rect.Min.Y = min(rect.Min.Y, -g.Ascent)
+		rect.Max.Y = max(rect.Max.Y, g.Descent)
+		rect.Max.X += g.Advance
 	}
 
-	return rect
+	return image.Rectangle{
+		Min: image.Point{Y: rect.Min.Y.Floor()},
+		Max: image.Point{
+			X: rect.Max.X.Ceil(),
+			Y: rect.Max.Y.Ceil(),
+		},
+	}
 }
 
 // Advance returns the width of the run in pixels.
