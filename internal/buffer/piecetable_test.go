@@ -281,9 +281,8 @@ func TestMarkerOnInsert(t *testing.T) {
 		pt := NewPieceTable([]byte("hello,world"))
 		marker := pt.CreateMarker(6, bais)
 
-		initOffset := pt.GetMarkerOffset(marker)
-		if initOffset != 6 {
-			t.Logf("initOffset: %d", initOffset)
+		if marker.Offset() != 6 {
+			t.Logf("initOffset: %d", marker.Offset())
 			t.FailNow()
 		}
 		return pt, marker
@@ -333,7 +332,7 @@ func TestMarkerOnInsert(t *testing.T) {
 			pt, marker := setup(tc.bais)
 			pt.Replace(tc.insertOffset, tc.insertOffset, "golang")
 
-			newOffset := pt.GetMarkerOffset(marker)
+			newOffset := marker.Offset()
 			if newOffset != tc.wantMarkerOffset {
 				t.Logf("newOffset: %d, pt: %s", newOffset, readTableContent(pt))
 				t.Fail()
@@ -351,7 +350,7 @@ func TestMarkerOnErase(t *testing.T) {
 		pt.Replace(12, 12, " world")
 		marker := pt.CreateMarker(markerPos, bais)
 
-		initOffset := pt.GetMarkerOffset(marker)
+		initOffset := marker.Offset()
 		if initOffset != markerPos {
 			t.Logf("initOffset: %d", initOffset)
 			t.FailNow()
@@ -428,7 +427,7 @@ func TestMarkerOnErase(t *testing.T) {
 			pt, marker := setup(tc.markerPos, tc.bais)
 			pt.Replace(tc.eraseRange[0], tc.eraseRange[1], "")
 
-			newOffset := pt.GetMarkerOffset(marker)
+			newOffset := marker.Offset()
 			if newOffset != tc.wantMarkerOffset {
 				t.Logf("actualOffset: %d, pt: %s", newOffset, readTableContent(pt))
 				t.Fail()

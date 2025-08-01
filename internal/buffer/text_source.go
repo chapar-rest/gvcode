@@ -35,8 +35,6 @@ type TextSource interface {
 	// controlls how the markers move when the insertion/deletion happens at the boundary location
 	// of the marker.
 	CreateMarker(runeOff int, bais MarkerBias) *Marker
-	// GetMarkerOffset returns the rune offset of the marker in the document.
-	GetMarkerOffset(marker *Marker) int
 	// RemoveMarker removes a marker from the text source.
 	RemoveMarker(m *Marker)
 

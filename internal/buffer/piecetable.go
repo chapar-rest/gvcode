@@ -481,6 +481,8 @@ func (pt *PieceTable) Replace(startOff, endOff int, text string) bool {
 		endOff = pt.seqLength
 	}
 
+	defer pt.syncMarkerOffset(nil)
+
 	if startOff == endOff && text != "" {
 		return pt.insert(startOff, text)
 	}
@@ -620,6 +622,7 @@ func (pt *PieceTable) CreateMarker(runeOff int, bais MarkerBias) *Marker {
 	p, inRuneOff := pt.pieces.FindPiece(runeOff)
 	marker := newMarker(p, inRuneOff, bais)
 	pt.markers = append(pt.markers, marker)
+	pt.syncMarkerOffset(marker)
 	return marker
 }
 
@@ -633,12 +636,12 @@ func (pt *PieceTable) updateMarkersOnSplit(oldPiece *piece, splitOffset int, lef
 			continue
 		}
 
-		if marker.offset < splitOffset {
+		if marker.pieceOffset < splitOffset {
 			// Marker is in the left part, update its piece.
-			marker.update(leftPiece, marker.offset)
-		} else if marker.offset > splitOffset {
+			marker.update(leftPiece, marker.pieceOffset)
+		} else if marker.pieceOffset > splitOffset {
 			// Marker is in the right part, update its piece and relative offset.
-			marker.update(rightPiece, marker.offset-splitOffset)
+			marker.update(rightPiece, marker.pieceOffset-splitOffset)
 		} else {
 			// Marker is exactly at the split point, use bias.
 			if marker.bias == BiasBackward {
@@ -660,61 +663,64 @@ func (pt *PieceTable) updateMarkersOnErase(oldPiece *piece, splitOffset int, rem
 
 		if splitOffset == 0 && removedRunes == oldPiece.length {
 			// The whole piece is removed, mark marker as invalid
-			marker.valid = false
+			marker.stale = true
 			continue
 		}
 
-		if marker.offset < splitOffset {
+		if marker.pieceOffset < splitOffset {
 			if leftPiece != nil {
 				// Marker is in the left part, update its piece.
-				marker.update(leftPiece, marker.offset)
+				marker.update(leftPiece, marker.pieceOffset)
 			} else {
-				marker.valid = false
+				marker.stale = true
 			}
-		} else if marker.offset == splitOffset {
+		} else if marker.pieceOffset == splitOffset {
 			if marker.bias == BiasBackward && leftPiece != nil {
-				marker.update(leftPiece, marker.offset)
+				marker.update(leftPiece, marker.pieceOffset)
 			} else {
-				marker.valid = false
+				marker.stale = true
 			}
-		} else if marker.offset > splitOffset && marker.offset < splitOffset+removedRunes {
-			marker.valid = false
-		} else if marker.offset == splitOffset+removedRunes {
+		} else if marker.pieceOffset > splitOffset && marker.pieceOffset < splitOffset+removedRunes {
+			marker.stale = true
+		} else if marker.pieceOffset == splitOffset+removedRunes {
 			if marker.bias == BiasBackward {
-				marker.valid = false
+				marker.stale = true
 			} else if rightPiece != nil {
 				marker.update(rightPiece, 0)
 			}
 
-		} else if marker.offset > splitOffset+removedRunes {
+		} else if marker.pieceOffset > splitOffset+removedRunes {
 			if rightPiece != nil {
 				// Marker is in the right part, update its piece and relative offset.
-				marker.update(rightPiece, marker.offset-splitOffset-removedRunes)
+				marker.update(rightPiece, marker.pieceOffset-splitOffset-removedRunes)
 			} else {
-				marker.valid = false
+				marker.stale = true
 			}
 		}
 	}
 }
 
 // getMarkerOffset returns the rune offset of the marker in the document.
-func (pt *PieceTable) GetMarkerOffset(m *Marker) int {
-	pt.mu.RLock()
-	defer pt.mu.RUnlock()
-
+func (pt *PieceTable) syncMarkerOffset(marker *Marker) {
 	absOff := 0
+
 	for n := pt.pieces.Head(); n != pt.pieces.tail; n = n.next {
-		if m.piece == n {
-			m.valid = true
-			absOff += m.offset
-			return absOff
+		if marker == nil {
+			for _, m := range pt.markers {
+				if m.piece == n {
+					m.stale = false
+					m.offset = absOff + m.pieceOffset
+				}
+			}
+		} else {
+			if marker.piece == n {
+				marker.stale = false
+				marker.offset = absOff + marker.pieceOffset
+			}
 		}
 
 		absOff += n.length
 	}
-
-	// Invalid marker
-	return -1
 }
 
 func (pt *PieceTable) RemoveMarker(m *Marker) {

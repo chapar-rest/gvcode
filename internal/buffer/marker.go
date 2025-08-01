@@ -31,66 +31,37 @@ type Marker struct {
 	// The piece reference that the marker belongs to.
 	piece *piece
 	// rune offset of the marker in the piece.
+	pieceOffset int
+	// rune offset of the marker in the document.
 	offset int
 	bias   MarkerBias
-	valid  bool
-}
-
-// Update the marker after each editing of the buffer.
-// startOffset: The start of the replaced range.
-// replacedLen: The length of the text that was removed in runes.
-// insertedLen: The length of the new text in runes.
-func (m *Marker) Update(startOff, replacedLen, insertedLen int) {
-	endOff := startOff + replacedLen
-	delta := insertedLen - replacedLen
-
-	if m.offset < startOff {
-		// Marker is before the change; do nothing.
-		return
-	}
-
-	if m.offset > endOff {
-		// Marker is after the change; just shift it.
-		m.offset += delta
-		return
-	}
-
-	// Marker is at a boundary or inside the replaced range. use bias
-	// to determine how to shift the offset.
-	switch m.offset {
-	case startOff:
-		if m.bias == BiasForward {
-			// Forward bias: marker moves to the end of the inserted text.
-			m.offset += insertedLen
-		} else {
-			// Backward bias: marker stays put at the beginning.
-		}
-	case endOff:
-		if m.bias == BiasBackward {
-			// Backward bias: marker gets pulled to the start of the inserted text.
-			m.offset = startOff
-		} else {
-			// Forward bias: marker is pushed to the end of the inserted text.
-			m.offset = startOff + insertedLen
-		}
-
-	default:
-		// Marker was inside the replaced range; move it to the insertion point.
-		m.offset = startOff
-	}
-
+	stale  bool
 }
 
 func (m *Marker) update(p *piece, pieceOffset int) {
 	m.piece = p
-	m.offset = pieceOffset
+	m.pieceOffset = pieceOffset
+}
+
+// Offset returns the rune offset of the marker in the document.
+// If the marker is stale, it returns -1.
+func (m *Marker) Offset() int {
+	if m.stale {
+		return -1
+	}
+	return m.offset
+}
+
+func (m *Marker) Stale() bool {
+	return m.stale
 }
 
 func newMarker(p *piece, pieceOffset int, bais MarkerBias) *Marker {
 	return &Marker{
-		piece:  p,
-		offset: pieceOffset,
-		bias:   bais,
-		valid:  true,
+		piece:       p,
+		pieceOffset: pieceOffset,
+		offset:      -1,
+		bias:        bais,
+		stale:       true,
 	}
 }
