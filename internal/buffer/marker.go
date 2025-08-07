@@ -43,9 +43,7 @@ func (m *Marker) update(p *piece, pieceOffset int) {
 }
 
 // Offset returns the rune offset of the marker in the document.
-// If the marker is stale, it returns -1.
 func (m *Marker) Offset() int {
-
 	return m.offset
 }
 

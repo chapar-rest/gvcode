@@ -56,9 +56,9 @@ type Decoration struct {
 	endMarker     *buffer.Marker
 }
 
-// Bind binds the decoration the the text source. This adds the start
+// bind binds the decoration the the text source. This adds the start
 // and end position as markers to the text source.
-func (d *Decoration) Bind(src buffer.TextSource) error {
+func (d *Decoration) bind(src buffer.TextSource) error {
 	if d.Start < 0 || d.End < 0 {
 		return errors.New("invalid decoration range")
 	}
@@ -78,6 +78,16 @@ func (d *Decoration) Bind(src buffer.TextSource) error {
 
 func (d *Decoration) Range() (start, end *buffer.Marker) {
 	return d.startMarker, d.endMarker
+}
+
+// clear removes markers from the text source.
+func (d *Decoration) clear(src buffer.TextSource) {
+	if d.startMarker != nil {
+		src.RemoveMarker(d.startMarker)
+	}
+	if d.endMarker != nil {
+		src.RemoveMarker(d.endMarker)
+	}
 }
 
 // func (d *Decoration) CheckValid() error {
@@ -119,25 +129,33 @@ func (d *Decoration) Range() (start, end *buffer.Marker) {
 
 // DecorationTree leverages a interval tree to stores overlapping decorations.
 type DecorationTree struct {
+	src          buffer.TextSource
 	tree         *interval.MultiValueSearchTree[Decoration, int]
 	lineSplitter decorationLineSplitter
 }
 
-func NewDecorationTree() *DecorationTree {
+func NewDecorationTree(src buffer.TextSource) *DecorationTree {
 	tree := interval.NewMultiValueSearchTree[Decoration](func(a, b int) int {
 		return cmp.Compare(a, b)
 	})
 
 	return &DecorationTree{
+		src:  src,
 		tree: tree,
 	}
 }
 
 // Insert a new decoration range. start and end are offset in rune in the document.
-func (d *DecorationTree) Insert(decos ...Decoration) {
+func (d *DecorationTree) Insert(decos ...Decoration) error {
 	for _, deco := range decos {
+		err := deco.bind(d.src)
+		if err != nil {
+			return err
+		}
 		d.tree.Insert(deco.Start, deco.End, deco)
 	}
+
+	return nil
 }
 
 // Query returns all styles at a given character offset
@@ -170,29 +188,38 @@ func (d *DecorationTree) RemoveBySource(source string) error {
 
 	for _, deco := range all {
 		if deco.Source == source {
-			d.tree.Delete(deco.Start, deco.End)
+			err := d.tree.Delete(deco.Start, deco.End)
+			if err != nil {
+				return err
+			}
+			deco.clear(d.src)
 		}
 	}
 
 	return nil
 }
 
-func (d *DecorationTree) RemoveAll() {
+func (d *DecorationTree) RemoveAll() error {
 	maxVals, found := d.tree.MaxEnd()
 	if !found {
-		return
+		return nil
 	}
 
 	end := maxVals[0].End
 	all, found := d.tree.AllIntersections(0, end)
 	if !found {
-		return
+		return nil
 	}
 
 	for _, deco := range all {
-		d.tree.Delete(deco.Start, deco.End)
+		err := d.tree.Delete(deco.Start, deco.End)
+		if err != nil {
+			return err
+		}
+		deco.clear(d.src)
 	}
 
+	return nil
 }
 
 // Refresh checks if any decoration range has changed and rebuilds the interval

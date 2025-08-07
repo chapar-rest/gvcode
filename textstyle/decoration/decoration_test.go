@@ -2,10 +2,12 @@ package decoration
 
 import (
 	"testing"
+
+	"github.com/oligo/gvcode/internal/buffer"
 )
 
 func TestInsertDecoration(t *testing.T) {
-	d := NewDecorationTree()
+	d := NewDecorationTree(buffer.NewTextSource())
 
 	bg := Decoration{Start: 0, End: 5, Background: &Background{}}
 	italic := Decoration{Start: 6, End: 9, Italic: true}
@@ -28,7 +30,7 @@ func TestInsertDecoration(t *testing.T) {
 }
 
 func TestRemoveDecorationBySource(t *testing.T) {
-	d := NewDecorationTree()
+	d := NewDecorationTree(buffer.NewTextSource())
 
 	bg := Decoration{Start: 0, End: 5, Background: &Background{}}
 	italic := Decoration{Start: 6, End: 9, Italic: true}

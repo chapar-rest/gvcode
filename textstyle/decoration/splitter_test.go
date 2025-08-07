@@ -14,10 +14,10 @@ import (
 )
 
 func TestLineSplit(t *testing.T) {
+	buf := buffer.NewTextSource()
 	layoutText := func(doc string) *lt.Line {
 		gtx := layout.Context{Constraints: layout.Constraints{Max: image.Point{X: 1e6, Y: 1e6}}}
 
-		buf := buffer.NewTextSource()
 		buf.SetText([]byte(doc))
 		layouter := lt.NewTextLayout(buf)
 		textSize := fixed.I(gtx.Sp(14))
@@ -76,7 +76,7 @@ func TestLineSplit(t *testing.T) {
 
 	for i, tc := range testcases {
 		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
-			tree := NewDecorationTree()
+			tree := NewDecorationTree(buf)
 			tree.Insert(tc.decos...)
 			var runs []painter.RenderRun
 			tree.Split(line, &runs)

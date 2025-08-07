@@ -10,26 +10,18 @@ func (e *TextView) AddDecorations(styles ...decoration.Decoration) error {
 		panic("TextView is not properly  initialized.")
 	}
 
-	for i := range styles {
-		err := styles[i].Bind(e.src)
-		if err != nil {
-			return err
-		}
-	}
-
-	e.decorations.Insert(styles...)
-	return nil
+	return e.decorations.Insert(styles...)
 }
 
-func (e *TextView) ClearDecorations(source string) {
+func (e *TextView) ClearDecorations(source string) error {
 	if e.decorations == nil {
 		panic("TextView is not properly  initialized.")
 	}
 
 	if source == "" {
-		e.decorations.RemoveAll()
+		return e.decorations.RemoveAll()
 	} else {
-		e.decorations.RemoveBySource(source)
+		return e.decorations.RemoveBySource(source)
 	}
 }
 
