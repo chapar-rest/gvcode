@@ -208,12 +208,15 @@ func main() {
 	highlightColor2, _ := gvcolor.Hex2Color("#f1c40f50")
 	highlightColor3, _ := gvcolor.Hex2Color("#e74c3c")
 
-	editorApp.state.AddDecorations(
+	err := editorApp.state.AddDecorations(
 		decoration.Decoration{Source: "test", Start: 5, End: 150, Background: &decoration.Background{Color: highlightColor}},
 		decoration.Decoration{Source: "test", Start: 100, End: 200, Background: &decoration.Background{Color: highlightColor2}},
 		decoration.Decoration{Source: "test", Start: 100, End: 200, Squiggle: &decoration.Squiggle{Color: highlightColor3}},
 		decoration.Decoration{Source: "test", Start: 250, End: 400, Strikethrough: &decoration.Strikethrough{Color: highlightColor3}},
 	)
+	if err != nil {
+		panic(err)
+	}
 
 	go func() {
 		err := editorApp.run()

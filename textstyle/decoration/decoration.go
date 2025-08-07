@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/oligo/gvcode/color"
+	"github.com/oligo/gvcode/internal/buffer"
 	"github.com/oligo/gvcode/internal/layout"
 	"github.com/oligo/gvcode/internal/painter"
 	"github.com/rdleal/intervalst/interval"
@@ -41,7 +42,6 @@ type Decoration struct {
 	// Source marks where the decoration is from.
 	Source any
 	// Priority configures the painting order of the decoration.
-	// TODO.
 	Priority int
 	// Start and End are rune offset in the document.
 	Start, End    int
@@ -52,6 +52,32 @@ type Decoration struct {
 	Border        *Border
 	Italic        bool
 	Bold          bool
+	startMarker   *buffer.Marker
+	endMarker     *buffer.Marker
+}
+
+// Bind binds the decoration the the text source. This adds the start
+// and end position as markers to the text source.
+func (d *Decoration) Bind(src buffer.TextSource) error {
+	if d.Start < 0 || d.End < 0 {
+		return errors.New("invalid decoration range")
+	}
+
+	markerStart, err := src.CreateMarker(d.Start, buffer.BiasBackward)
+	if err != nil {
+		return err
+	}
+	markerEnd, err := src.CreateMarker(d.End, buffer.BiasForward)
+	if err != nil {
+		return err
+	}
+	d.startMarker = markerStart
+	d.endMarker = markerEnd
+	return nil
+}
+
+func (d *Decoration) Range() (start, end *buffer.Marker) {
+	return d.startMarker, d.endMarker
 }
 
 // func (d *Decoration) CheckValid() error {
@@ -167,6 +193,41 @@ func (d *DecorationTree) RemoveAll() {
 		d.tree.Delete(deco.Start, deco.End)
 	}
 
+}
+
+// Refresh checks if any decoration range has changed and rebuilds the interval
+// tree if necessary.
+func (d *DecorationTree) Refresh() {
+	maxVals, found := d.tree.MaxEnd()
+	if !found {
+		return
+	}
+
+	end := maxVals[0].End
+	all, found := d.tree.AllIntersections(0, end)
+	if !found {
+		return
+	}
+
+	invalid := false
+
+	for i := range all {
+		deco := all[i]
+		start, end := deco.Range()
+		if start.Offset() != deco.Start || end.Offset() != deco.End {
+			//log.Printf("old: %d-%d, new: %d-%d", deco.Start, deco.End, start.Offset(), end.Offset())
+			invalid = true
+			all[i].Start = start.Offset()
+			all[i].End = end.Offset()
+		}
+	}
+
+	if invalid {
+		d.tree = interval.NewMultiValueSearchTree[Decoration](func(a, b int) int {
+			return cmp.Compare(a, b)
+		})
+		d.Insert(all...)
+	}
 }
 
 // Split implements painter.LineSplitter
