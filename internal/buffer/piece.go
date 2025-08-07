@@ -261,3 +261,23 @@ func (p *pieceRange) Length() int {
 
 	return t
 }
+
+// Pieces retruns all the pieces of pieceRange as a slice.
+func (p *pieceRange) Pieces() []*piece {
+	pieces := make([]*piece, 0)
+
+	if p.first == nil || p.boundary {
+		return pieces
+	}
+
+	if p.first == p.last {
+		pieces = append(pieces, p.first)
+		return pieces
+	}
+
+	for n := p.first; n != p.last.next; n = n.next {
+		pieces = append(pieces, n)
+	}
+
+	return pieces
+}

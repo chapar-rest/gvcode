@@ -34,7 +34,7 @@ type TextSource interface {
 	// CreateMarker adds a new marker at position runeOff, with the specified bais. A bais
 	// controlls how the markers move when the insertion/deletion happens at the boundary location
 	// of the marker.
-	CreateMarker(runeOff int, bais MarkerBias) *Marker
+	CreateMarker(runeOff int, bais MarkerBias) (*Marker, error)
 	// RemoveMarker removes a marker from the text source.
 	RemoveMarker(m *Marker)
 

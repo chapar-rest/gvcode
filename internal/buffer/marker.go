@@ -30,12 +30,11 @@ const (
 type Marker struct {
 	// The piece reference that the marker belongs to.
 	piece *piece
-	// rune offset of the marker in the piece.
+	// rune offset of the marker in the piece relative to the piece offset.
 	pieceOffset int
 	// rune offset of the marker in the document.
 	offset int
 	bias   MarkerBias
-	stale  bool
 }
 
 func (m *Marker) update(p *piece, pieceOffset int) {
@@ -46,14 +45,8 @@ func (m *Marker) update(p *piece, pieceOffset int) {
 // Offset returns the rune offset of the marker in the document.
 // If the marker is stale, it returns -1.
 func (m *Marker) Offset() int {
-	if m.stale {
-		return -1
-	}
-	return m.offset
-}
 
-func (m *Marker) Stale() bool {
-	return m.stale
+	return m.offset
 }
 
 func newMarker(p *piece, pieceOffset int, bais MarkerBias) *Marker {
@@ -62,6 +55,5 @@ func newMarker(p *piece, pieceOffset int, bais MarkerBias) *Marker {
 		pieceOffset: pieceOffset,
 		offset:      -1,
 		bias:        bais,
-		stale:       true,
 	}
 }

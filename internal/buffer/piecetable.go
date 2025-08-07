@@ -395,10 +395,10 @@ func (pt *PieceTable) erase(startOff, endOff int) bool {
 			newPieces.Append(rightPiece)
 		}
 		bytesErased += startPiece.byteLength - leftByteLen - rightByteLen
+		pt.updateMarkersOnErase(oldPieces, newPieces)
 		pt.push2UndoStack(oldPieces, newPieces)
 		pt.seqLength -= endOff - startOff
 		pt.seqBytes -= bytesErased
-		pt.updateMarkersOnErase(startPiece, inRuneOff, endOff-startOff, leftPiece, rightPiece)
 		return true
 	}
 
@@ -420,8 +420,6 @@ func (pt *PieceTable) erase(startOff, endOff int) bool {
 		bytesErased += startPiece.byteLength - leftByteLen
 		n = startPiece.next
 		offset += startPiece.length - inRuneOff
-		pt.updateMarkersOnErase(startPiece, inRuneOff, startPiece.length-inRuneOff, leftPiece, nil)
-
 	}
 
 	for ; n != pt.pieces.tail; n = n.next {
@@ -444,10 +442,8 @@ func (pt *PieceTable) erase(startOff, endOff int) bool {
 			}
 			newPieces.Append(rightPiece)
 			bytesErased += n.byteLength - byteLen
-			pt.updateMarkersOnErase(n, 0, endOff-offset, nil, rightPiece)
 		} else {
 			bytesErased += n.byteLength
-			pt.updateMarkersOnErase(n, 0, n.length, nil, nil)
 		}
 
 		// push pieces in the middle and the end piece to undo stack.
@@ -462,6 +458,7 @@ func (pt *PieceTable) erase(startOff, endOff int) bool {
 		newPieces.AsBoundary(n)
 	}
 
+	pt.updateMarkersOnErase(oldPieces, newPieces)
 	// swap link the new piece into the sequence
 	pt.push2UndoStack(oldPieces, newPieces)
 	pt.seqLength -= endOff - startOff
@@ -615,15 +612,18 @@ func (pt *PieceTable) ReadAt(p []byte, offset int64) (total int, err error) {
 	return
 }
 
-func (pt *PieceTable) CreateMarker(runeOff int, bais MarkerBias) *Marker {
+func (pt *PieceTable) CreateMarker(runeOff int, bais MarkerBias) (*Marker, error) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
 	p, inRuneOff := pt.pieces.FindPiece(runeOff)
+	if *p == (piece{}) {
+		return nil, fmt.Errorf("invalid runeOff: %d", runeOff)
+	}
 	marker := newMarker(p, inRuneOff, bais)
 	pt.markers = append(pt.markers, marker)
 	pt.syncMarkerOffset(marker)
-	return marker
+	return marker, nil
 }
 
 // updateMarkersOnSplit update any markers that were in the piece being split.
@@ -655,46 +655,113 @@ func (pt *PieceTable) updateMarkersOnSplit(oldPiece *piece, splitOffset int, lef
 
 }
 
-func (pt *PieceTable) updateMarkersOnErase(oldPiece *piece, splitOffset int, removedRunes int, leftPiece, rightPiece *piece) {
-	for _, marker := range pt.markers {
-		if marker.piece != oldPiece {
-			continue
+func (pt *PieceTable) updateMarkersOnErase(oldPieces *pieceRange, newPieces *pieceRange) {
+	var start, end, head, tail *piece
+
+	leftovers := newPieces.Pieces()
+	originals := oldPieces.Pieces()
+	if len(originals) == 0 {
+		return
+	}
+	start = originals[0]
+	end = originals[len(originals)-1]
+
+	switch len(leftovers) {
+	case 0:
+		// nothing to do.
+	case 1:
+		if start.offset == leftovers[0].offset {
+			head = leftovers[0]
+		} else {
+			tail = leftovers[0]
+		}
+	case 2:
+		head = leftovers[0]
+		tail = leftovers[1]
+	default:
+		panic("invalid left over pieces after erase")
+	}
+
+	wholePieceRemoved := func(idx int, p *piece) bool {
+		if len(originals) == 1 {
+			return head == nil && tail == nil
 		}
 
-		if splitOffset == 0 && removedRunes == oldPiece.length {
-			// The whole piece is removed, mark marker as invalid
-			marker.stale = true
-			continue
+		if idx > 0 && idx < len(originals)-1 {
+			return true
 		}
 
-		if marker.pieceOffset < splitOffset {
-			if leftPiece != nil {
-				// Marker is in the left part, update its piece.
-				marker.update(leftPiece, marker.pieceOffset)
-			} else {
-				marker.stale = true
-			}
-		} else if marker.pieceOffset == splitOffset {
-			if marker.bias == BiasBackward && leftPiece != nil {
-				marker.update(leftPiece, marker.pieceOffset)
-			} else {
-				marker.stale = true
-			}
-		} else if marker.pieceOffset > splitOffset && marker.pieceOffset < splitOffset+removedRunes {
-			marker.stale = true
-		} else if marker.pieceOffset == splitOffset+removedRunes {
-			if marker.bias == BiasBackward {
-				marker.stale = true
-			} else if rightPiece != nil {
-				marker.update(rightPiece, 0)
+		return (idx == 0 && head == nil) || (idx == len(originals)-1 && tail == nil)
+	}
+
+	for idx, old := range originals {
+		pieceRemoved := wholePieceRemoved(idx, old)
+		for _, marker := range pt.markers {
+			if marker.piece != old {
+				continue
 			}
 
-		} else if marker.pieceOffset > splitOffset+removedRunes {
-			if rightPiece != nil {
-				// Marker is in the right part, update its piece and relative offset.
-				marker.update(rightPiece, marker.pieceOffset-splitOffset-removedRunes)
+			if pieceRemoved {
+				if marker.bias == BiasBackward {
+					if head == nil {
+						marker.update(start.prev, start.prev.length)
+					} else {
+						marker.update(head, head.length)
+					}
+				} else {
+					// forward bais
+					if tail == nil {
+						marker.update(end.next, 0)
+					} else {
+						marker.update(tail, 0)
+					}
+				}
+				continue
+			}
+			// else only part of the current piece is removed.
+
+			// update markers in start or end pieces
+			var headLen, tailLen int
+			if head != nil {
+				headLen = head.length
+			}
+			if tail != nil {
+				tailLen = tail.length
+			}
+
+			if idx == 0 {
+				if marker.pieceOffset > headLen && marker.pieceOffset < start.length-tailLen {
+					if head != nil {
+						marker.update(head, head.length)
+					} else {
+						marker.update(tail, 0)
+					}
+				} else if marker.pieceOffset <= headLen {
+					if head != nil {
+						marker.update(head, marker.pieceOffset)
+					} else {
+						marker.update(tail, 0)
+					}
+				} else if marker.pieceOffset >= start.length-tailLen {
+					if tail != nil {
+						marker.update(tail, marker.pieceOffset-(start.length-tailLen))
+					} else {
+						marker.update(head, headLen)
+					}
+				}
+				continue
 			} else {
-				marker.stale = true
+				// the last piece
+				if marker.pieceOffset >= end.length-tailLen {
+					if tail != nil {
+						marker.update(tail, marker.pieceOffset-(end.length-tailLen))
+					} else {
+						marker.update(end.next, 0)
+					}
+				} else {
+					marker.update(tail, 0)
+				}
+
 			}
 		}
 	}
@@ -708,13 +775,11 @@ func (pt *PieceTable) syncMarkerOffset(marker *Marker) {
 		if marker == nil {
 			for _, m := range pt.markers {
 				if m.piece == n {
-					m.stale = false
 					m.offset = absOff + m.pieceOffset
 				}
 			}
 		} else {
 			if marker.piece == n {
-				marker.stale = false
 				marker.offset = absOff + marker.pieceOffset
 			}
 		}

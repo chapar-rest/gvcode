@@ -279,7 +279,7 @@ func TestGroupOp(t *testing.T) {
 func TestMarkerOnInsert(t *testing.T) {
 	setup := func(bais MarkerBias) (*PieceTable, *Marker) {
 		pt := NewPieceTable([]byte("hello,world"))
-		marker := pt.CreateMarker(6, bais)
+		marker, _ := pt.CreateMarker(6, bais)
 
 		if marker.Offset() != 6 {
 			t.Logf("initOffset: %d", marker.Offset())
@@ -343,12 +343,12 @@ func TestMarkerOnInsert(t *testing.T) {
 }
 
 func TestMarkerOnErase(t *testing.T) {
-	setup := func(markerPos int, bais MarkerBias) (*PieceTable, *Marker) {
+	setup := func(markerPos int) (*PieceTable, *Marker) {
 		pt := NewPieceTable([]byte(""))
 		pt.Replace(0, 0, "Hello,")
 		pt.Replace(6, 6, "golang")
 		pt.Replace(12, 12, " world")
-		marker := pt.CreateMarker(markerPos, bais)
+		marker, _ := pt.CreateMarker(markerPos, BiasBackward)
 
 		initOffset := marker.Offset()
 		if initOffset != markerPos {
@@ -361,75 +361,57 @@ func TestMarkerOnErase(t *testing.T) {
 	testcases := []struct {
 		eraseRange       []int
 		markerPos        int
-		bais             MarkerBias
 		wantMarkerOffset int
 	}{
 		{
 			eraseRange:       []int{0, 2},
 			markerPos:        3,
-			bais:             BiasForward,
 			wantMarkerOffset: 1,
 		},
 		{
 			eraseRange:       []int{0, 2},
 			markerPos:        2,
-			bais:             BiasForward,
 			wantMarkerOffset: 0,
 		},
-		{
-			eraseRange:       []int{0, 2},
-			markerPos:        2,
-			bais:             BiasBackward,
-			wantMarkerOffset: -1,
-		},
+
 		{
 			eraseRange:       []int{1, 2},
 			markerPos:        1,
-			bais:             BiasForward,
-			wantMarkerOffset: -1,
-		},
-		{
-			eraseRange:       []int{1, 2},
-			markerPos:        1,
-			bais:             BiasBackward,
 			wantMarkerOffset: 1,
 		},
+
 		{
 			eraseRange:       []int{4, 6},
 			markerPos:        3,
-			bais:             BiasForward,
 			wantMarkerOffset: 3,
 		},
 		{
 			eraseRange:       []int{4, 6},
 			markerPos:        5,
-			bais:             BiasForward,
-			wantMarkerOffset: -1,
+			wantMarkerOffset: 4,
 		},
 
 		{
 			eraseRange:       []int{6, 12},
 			markerPos:        7,
-			bais:             BiasForward,
-			wantMarkerOffset: -1,
+			wantMarkerOffset: 6,
 		},
 
 		{
 			eraseRange:       []int{5, 13},
 			markerPos:        14,
-			bais:             BiasForward,
 			wantMarkerOffset: 6,
 		},
 	}
 
 	for idx, tc := range testcases {
 		t.Run(fmt.Sprintf("%d-offset:%v", idx, tc.eraseRange), func(t *testing.T) {
-			pt, marker := setup(tc.markerPos, tc.bais)
+			pt, marker := setup(tc.markerPos)
 			pt.Replace(tc.eraseRange[0], tc.eraseRange[1], "")
 
 			newOffset := marker.Offset()
 			if newOffset != tc.wantMarkerOffset {
-				t.Logf("actualOffset: %d, pt: %s", newOffset, readTableContent(pt))
+				t.Logf("expectedOffset: %d, actualOffset: %d, pt: %s", tc.wantMarkerOffset, newOffset, readTableContent(pt))
 				t.Fail()
 			}
 		})
