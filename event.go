@@ -471,7 +471,7 @@ func (e *Editor) onInsertLineBreak(ke key.Event) EditorEvent {
 // an auto inserted bracket/quote pair.
 func (e *Editor) onDeleteBackward() {
 	start, end := e.Selection()
-	if start != end {
+	if start != end || start <= 0 {
 		return
 	}
 
