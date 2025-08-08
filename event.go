@@ -128,7 +128,7 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 				Y: int(math.Round(float64(evt.Position.Y))),
 			})
 			gtx.Execute(key.FocusCmd{Tag: e})
-			if !e.readOnly {
+			if e.mode != ModeReadOnly {
 				gtx.Execute(key.SoftKeyboardCmd{Show: true})
 			}
 			if e.scroller.State() != gestureExt.StateFlinging {
@@ -161,6 +161,10 @@ func (e *Editor) processPointerEvent(gtx layout.Context, ev event.Event) (Editor
 
 			if e.completor != nil {
 				e.completor.Cancel()
+			}
+			// switch to normal mode when clicked.
+			if e.mode == ModeSnippet {
+				e.setMode(ModeNormal)
 			}
 		}
 	case pointer.Event:
@@ -225,7 +229,7 @@ func (e *Editor) processEditEvents(gtx layout.Context) EditorEvent {
 		case key.FocusEvent:
 			// Reset IME state.
 			e.ime.imeState = imeState{}
-			if ke.Focus && !e.readOnly {
+			if ke.Focus && e.mode != ModeReadOnly {
 				gtx.Execute(key.SoftKeyboardCmd{Show: true})
 			}
 		case key.SnippetEvent:
@@ -309,7 +313,7 @@ func (e *Editor) onCopyCut(gtx layout.Context, k key.Event) EditorEvent {
 
 	if text := string(e.scratch); text != "" {
 		gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(text))})
-		if k.Name == "X" && !e.readOnly {
+		if k.Name == "X" && e.mode != ModeReadOnly {
 			if !lineOp {
 				if e.Delete(1) != 0 {
 					return ChangeEvent{}
@@ -329,11 +333,22 @@ func (e *Editor) onCopyCut(gtx layout.Context, k key.Event) EditorEvent {
 // at position of the cursor, else indent or unindent the selected lines, depending on if
 // the event contains the shift modifier.
 func (e *Editor) onTab(k key.Event) EditorEvent {
-	if e.readOnly {
+	if e.mode == ModeReadOnly {
 		return nil
 	}
 
-	if e.text.IndentLines(k.Modifiers.Contain(key.ModShift)) > 0 {
+	shiftPressed := k.Modifiers.Contain(key.ModShift)
+
+	if e.mode == ModeSnippet {
+		if shiftPressed {
+			e.snippetCtx.PrevTabStop()
+		} else {
+			e.snippetCtx.NextTabStop()
+		}
+		return nil
+	}
+
+	if e.text.IndentLines(shiftPressed) > 0 {
 		// Reset xoff.
 		e.text.MoveCaret(0, 0)
 		e.scrollCaret = true
@@ -345,7 +360,7 @@ func (e *Editor) onTab(k key.Event) EditorEvent {
 }
 
 func (e *Editor) onTextInput(ke key.EditEvent) {
-	if e.readOnly || len(ke.Text) <= 0 {
+	if e.mode == ModeReadOnly || len(ke.Text) <= 0 {
 		return
 	}
 
@@ -424,7 +439,7 @@ func (e *Editor) GetCompletionContext() CompletionContext {
 }
 
 func (e *Editor) onPasteEvent(ke transfer.DataEvent) EditorEvent {
-	if e.readOnly {
+	if e.mode == ModeReadOnly {
 		return nil
 	}
 
@@ -455,7 +470,7 @@ func (e *Editor) onPasteEvent(ke transfer.DataEvent) EditorEvent {
 }
 
 func (e *Editor) onInsertLineBreak(ke key.Event) EditorEvent {
-	if e.readOnly {
+	if e.mode == ModeReadOnly {
 		return nil
 	}
 

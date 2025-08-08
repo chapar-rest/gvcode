@@ -3,6 +3,7 @@ package snippet
 import (
 	"cmp"
 	"errors"
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -41,6 +42,11 @@ type TabStop struct {
 
 func (ts TabStop) IsFinal() bool {
 	return ts.idx == 0 && ts.variable == ""
+}
+
+func (sc TabStop) String() string {
+	return fmt.Sprintf("TabStop(%d-%d)[content: %s, idx: %d, placeholder: %s, choices: %v, variable: %s, variableDefault: %s]",
+		sc.location.start, sc.location.end, sc.content, sc.idx, sc.placeholder, sc.choices, sc.variable, sc.variableDefault)
 }
 
 // Snippet holds the parsed data structure of the snippet format defined in LSP protocol:

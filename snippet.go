@@ -1,0 +1,191 @@
+package gvcode
+
+import (
+	"errors"
+	"fmt"
+	"log"
+
+	"gioui.org/io/key"
+	"gioui.org/layout"
+	"github.com/oligo/gvcode/internal/buffer"
+	"github.com/oligo/gvcode/snippet"
+	"github.com/oligo/gvcode/textstyle/decoration"
+)
+
+const (
+	snippetModeDeco = "_snippet_deco"
+)
+
+// snippetContext manages a LSP snippet states when the editor enters the
+// snippet mode. The user can then use Tab/Shift+Tab to navigate through
+// the tabstops defined in the snippet and fill the placeholders.
+type snippetContext struct {
+	editor *Editor
+	state  *snippet.Snippet
+	// currentIdx tracks the current tabstop.
+	currentIdx int
+	// origin marks the starting rune offset of the snippet.
+	origin int
+	// markers holds a left and right marker pair for each of the tabstop
+	// in the current snippet.
+	markers [][]*buffer.Marker
+}
+
+func newSnippetContext(editor *Editor) *snippetContext {
+	sc := &snippetContext{
+		editor:     editor,
+		currentIdx: -1,
+	}
+	// register a key command used to quit the snippet mode when pressed.
+	editor.RegisterCommand(sc, key.Filter{Name: key.NameEscape},
+		func(gtx layout.Context, evt key.Event) EditorEvent {
+			editor.setMode(ModeNormal)
+			log.Println("snippet mode exited")
+			return nil
+		})
+	return sc
+}
+
+func (sc *snippetContext) setSnippet(body string) (int, error) {
+	sc.currentIdx = -1
+	sc.state = snippet.NewSnippet(body)
+	err := sc.state.Parse()
+	if err != nil {
+		return 0, err
+	}
+
+	runes := sc.editor.Insert(sc.state.Template())
+	// move caret to the begining of the text.
+	sc.editor.MoveCaret(-runes, -runes)
+	// record the initial position of the snippet.
+	sc.origin, _ = sc.editor.Selection()
+
+	err = sc.addDecorations()
+	if err != nil {
+		return 0, fmt.Errorf("add decoration failed: %w", err)
+	}
+
+	sc.NextTabStop()
+	return runes, nil
+}
+
+func (sc *snippetContext) NextTabStop() error {
+	if sc.state == nil {
+		return errors.New("no snippet is set")
+	}
+
+	sc.currentIdx++
+
+	// sc.state.tabstops is sorted, so we can just iterate through it.
+	if sc.currentIdx < sc.state.TabStopSize() {
+		start, end := sc.getTabStopPosition(sc.currentIdx)
+		sc.editor.SetCaret(start, end)
+		return nil
+	} else {
+		// Reached the end of the tabstops
+		sc.editor.setMode(ModeNormal)
+		return nil
+	}
+
+}
+
+func (sc *snippetContext) PrevTabStop() error {
+	if sc.state == nil {
+		return errors.New("no snippet is set")
+	}
+
+	sc.currentIdx--
+
+	if sc.currentIdx >= 0 {
+		start, end := sc.getTabStopPosition(sc.currentIdx)
+		sc.editor.SetCaret(start, end)
+		return nil
+	} else {
+		// Reached the end of the tabstops
+		sc.editor.setMode(ModeNormal)
+		return nil
+	}
+}
+
+func (sc *snippetContext) getTabStopPosition(idx int) (int, int) {
+	log.Println("tabstop: ", sc.currentIdx, sc.state.TabStopAt(sc.currentIdx))
+	if len(sc.markers) > 0 && idx < len(sc.markers) {
+		markers := sc.markers[idx]
+		return markers[0].Offset(), markers[1].Offset()
+	}
+
+	start, end := sc.state.TabStopOff(sc.currentIdx)
+	return sc.origin + start, sc.origin + end
+}
+
+func (sc *snippetContext) addDecorations() error {
+	sc.markers = sc.markers[:0]
+
+	// add decorations for the tabstops
+	decos := make([]decoration.Decoration, 0)
+	for idx := range sc.state.TabStops() {
+		start, end := sc.state.TabStopOff(idx)
+		decos = append(decos, decoration.Decoration{
+			Source: snippetModeDeco,
+			Start:  sc.origin + start,
+			End:    sc.origin + end,
+			Border: &decoration.Border{Color: sc.editor.colorPalette.Foreground},
+		})
+
+	}
+
+	if len(decos) > 0 {
+		err := sc.editor.AddDecorations(decos...)
+		if err != nil {
+			return err
+		}
+
+		for idx := range decos {
+			startMarker, endMarker := decos[idx].Range()
+			if startMarker != nil && endMarker != nil {
+				sc.markers = append(sc.markers, []*buffer.Marker{startMarker, endMarker})
+			} else {
+				return fmt.Errorf("invalid marker for decoration: %d", idx)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (sc *snippetContext) cancel() {
+	sc.editor.ClearDecorations(snippetModeDeco)
+	sc.markers = sc.markers[:0]
+	sc.state = nil
+	sc.currentIdx = -1
+	sc.editor.RemoveCommands(sc)
+}
+
+func (e *Editor) InsertSnippet(body string) (insertedRunes int, err error) {
+	if e.mode == ModeSnippet {
+		// An ongoing snippet session exists. To avoid nested snippet editing,
+		// we try to insert the snippet body as plain text.
+		snp := snippet.NewSnippet(body)
+		err := snp.Parse()
+		if err != nil {
+			return 0, err
+		}
+
+		runes := e.Insert(snp.Template())
+		return runes, nil
+	}
+
+	e.snippetCtx = newSnippetContext(e)
+	err = e.setMode(ModeSnippet)
+	if err != nil {
+		return
+	}
+
+	insertedRunes, err = e.snippetCtx.setSnippet(body)
+	if err != nil {
+		return
+	}
+
+	return
+}
+

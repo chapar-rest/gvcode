@@ -146,13 +146,20 @@ func NewDecorationTree(src buffer.TextSource) *DecorationTree {
 }
 
 // Insert a new decoration range. start and end are offset in rune in the document.
+//
+// This method modifies the Decoration objects in the input slice `decos`
+// by calling their `bind` method. It is the caller's responsibility to
+// handle these mutations.
 func (d *DecorationTree) Insert(decos ...Decoration) error {
-	for _, deco := range decos {
-		err := deco.bind(d.src)
+	for idx := range decos {
+		err := decos[idx].bind(d.src)
 		if err != nil {
 			return err
 		}
-		d.tree.Insert(deco.Start, deco.End, deco)
+	}
+
+	for idx := range decos {
+		d.tree.Insert(decos[idx].Start, decos[idx].End, decos[idx])
 	}
 
 	return nil
