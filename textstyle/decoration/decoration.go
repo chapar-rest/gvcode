@@ -3,6 +3,7 @@ package decoration
 import (
 	"cmp"
 	"errors"
+	"slices"
 
 	"github.com/oligo/gvcode/color"
 	"github.com/oligo/gvcode/internal/buffer"
@@ -36,8 +37,9 @@ type Border struct {
 	Color color.Color
 }
 
-// Decoration defines APIs each concrete decorations should implement.
-// A decoration represents styles sharing between a range of text.
+// A decoration represents styles sharing between a range of text. After added
+// to the editor, the decoration position is dynamically updated, so there is no
+// need to re-create it every time the text changed in the editor.
 type Decoration struct {
 	// Source marks where the decoration is from.
 	Source any
@@ -59,7 +61,7 @@ type Decoration struct {
 // bind binds the decoration the the text source. This adds the start
 // and end position as markers to the text source.
 func (d *Decoration) bind(src buffer.TextSource) error {
-	if d.Start < 0 || d.End < 0 {
+	if d.Start < 0 || d.End < 0 || d.Start > d.End {
 		return errors.New("invalid decoration range")
 	}
 
@@ -76,6 +78,8 @@ func (d *Decoration) bind(src buffer.TextSource) error {
 	return nil
 }
 
+// Range returns the start and end markers representing the dynamic position
+// of the decoration in the editor.
 func (d *Decoration) Range() (start, end *buffer.Marker) {
 	return d.startMarker, d.endMarker
 }
@@ -129,8 +133,12 @@ func (d *Decoration) clear(src buffer.TextSource) {
 
 // DecorationTree leverages a interval tree to stores overlapping decorations.
 type DecorationTree struct {
-	src          buffer.TextSource
-	tree         *interval.MultiValueSearchTree[Decoration, int]
+	src  buffer.TextSource
+	tree *interval.MultiValueSearchTree[Decoration, int]
+	// emptyDecos stores a slice of decorations that have start equals to end.
+	// The interval tree does not allow us to store empty intervals, so we save
+	// them here.
+	emptyDecos   []Decoration
 	lineSplitter decorationLineSplitter
 }
 
@@ -159,7 +167,15 @@ func (d *DecorationTree) Insert(decos ...Decoration) error {
 	}
 
 	for idx := range decos {
-		d.tree.Insert(decos[idx].Start, decos[idx].End, decos[idx])
+		if decos[idx].Start == decos[idx].End {
+			d.emptyDecos = append(d.emptyDecos, decos[idx])
+			continue
+		}
+
+		err := d.tree.Insert(decos[idx].Start, decos[idx].End, decos[idx])
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -168,16 +184,26 @@ func (d *DecorationTree) Insert(decos ...Decoration) error {
 // Query returns all styles at a given character offset
 func (d *DecorationTree) Query(pos int) []Decoration {
 	all, _ := d.tree.AllIntersections(pos, pos+1)
+	for _, deco := range d.emptyDecos {
+		if deco.Start == pos {
+			all = append(all, deco)
+		}
+	}
 	return all
 }
 
 // QueryRange returns all segments overlapping the range
 func (d *DecorationTree) QueryRange(start, end int) []Decoration {
-	if start >= end {
+	if start > end {
 		return nil
 	}
 
 	all, _ := d.tree.AllIntersections(start, end)
+	for _, deco := range d.emptyDecos {
+		if deco.Start >= start && deco.Start < end {
+			all = append(all, deco)
+		}
+	}
 	return all
 }
 
@@ -203,6 +229,10 @@ func (d *DecorationTree) RemoveBySource(source string) error {
 		}
 	}
 
+	d.emptyDecos = slices.DeleteFunc(d.emptyDecos, func(deco Decoration) bool {
+		return deco.Source == source
+	})
+
 	return nil
 }
 
@@ -225,6 +255,7 @@ func (d *DecorationTree) RemoveAll() error {
 		}
 		deco.clear(d.src)
 	}
+	d.emptyDecos = d.emptyDecos[:0]
 
 	return nil
 }
@@ -245,7 +276,8 @@ func (d *DecorationTree) Refresh() {
 
 	invalid := false
 
-	for i := range all {
+	// check all decorations to see if refresh is needed.
+	for i := 0; i < len(all); i++ {
 		deco := all[i]
 		start, end := deco.Range()
 		if start.Offset() != deco.Start || end.Offset() != deco.End {
@@ -254,13 +286,42 @@ func (d *DecorationTree) Refresh() {
 			all[i].Start = start.Offset()
 			all[i].End = end.Offset()
 		}
+
+		if start.Offset() == end.Offset() {
+			d.emptyDecos = append(d.emptyDecos, all[i])
+			all = slices.Delete(all, i, i+1)
+			i = max(0, i-1) // adjust index
+		}
+	}
+
+	for i := 0; i < len(d.emptyDecos); i++ {
+		deco := d.emptyDecos[i]
+		start, end := deco.Range()
+		if start.Offset() != deco.Start || end.Offset() != deco.End {
+			invalid = true
+			d.emptyDecos[i].Start = start.Offset()
+			d.emptyDecos[i].End = end.Offset()
+		}
+
+		if start.Offset() != end.Offset() {
+			all = append(all, d.emptyDecos[i])
+			d.emptyDecos = slices.Delete(d.emptyDecos, i, i+1)
+			i = max(0, i-1) // adjust index
+		}
 	}
 
 	if invalid {
 		d.tree = interval.NewMultiValueSearchTree[Decoration](func(a, b int) int {
 			return cmp.Compare(a, b)
 		})
-		d.Insert(all...)
+
+		// do not re-create the marker, so we just insert into the tree.
+		for idx := range all {
+			if err := d.tree.Insert(all[idx].Start, all[idx].End, all[idx]); err != nil {
+				return
+			}
+		}
+
 	}
 }
 

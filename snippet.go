@@ -3,7 +3,6 @@ package gvcode
 import (
 	"errors"
 	"fmt"
-	"log"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
@@ -40,7 +39,6 @@ func newSnippetContext(editor *Editor) *snippetContext {
 	editor.RegisterCommand(sc, key.Filter{Name: key.NameEscape},
 		func(gtx layout.Context, evt key.Event) EditorEvent {
 			editor.setMode(ModeNormal)
-			log.Println("snippet mode exited")
 			return nil
 		})
 	return sc
@@ -108,7 +106,6 @@ func (sc *snippetContext) PrevTabStop() error {
 }
 
 func (sc *snippetContext) getTabStopPosition(idx int) (int, int) {
-	log.Println("tabstop: ", sc.currentIdx, sc.state.TabStopAt(sc.currentIdx))
 	if len(sc.markers) > 0 && idx < len(sc.markers) {
 		markers := sc.markers[idx]
 		return markers[0].Offset(), markers[1].Offset()
@@ -158,6 +155,7 @@ func (sc *snippetContext) cancel() {
 	sc.markers = sc.markers[:0]
 	sc.state = nil
 	sc.currentIdx = -1
+	sc.origin = 0
 	sc.editor.RemoveCommands(sc)
 }
 
@@ -188,4 +186,3 @@ func (e *Editor) InsertSnippet(body string) (insertedRunes int, err error) {
 
 	return
 }
-

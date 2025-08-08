@@ -687,7 +687,7 @@ func (e *Editor) GutterWidth() int {
 	return e.gutterWidth
 }
 
-// deprecated: use Mode() method please.
+// Deprecated: use Mode() method please.
 func (e *Editor) ReadOnly() bool {
 	return e.mode == ModeReadOnly
 }
