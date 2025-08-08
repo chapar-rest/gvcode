@@ -77,7 +77,7 @@ func (sc *snippetContext) NextTabStop() error {
 	// sc.state.tabstops is sorted, so we can just iterate through it.
 	if sc.currentIdx < sc.state.TabStopSize() {
 		start, end := sc.getTabStopPosition(sc.currentIdx)
-		sc.editor.SetCaret(start, end)
+		sc.editor.SetCaret(end, start)
 		return nil
 	} else {
 		// Reached the end of the tabstops
@@ -96,7 +96,7 @@ func (sc *snippetContext) PrevTabStop() error {
 
 	if sc.currentIdx >= 0 {
 		start, end := sc.getTabStopPosition(sc.currentIdx)
-		sc.editor.SetCaret(start, end)
+		sc.editor.SetCaret(end, start)
 		return nil
 	} else {
 		// Reached the end of the tabstops

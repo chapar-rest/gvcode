@@ -77,6 +77,10 @@ type CompletionCandidate struct {
 	// Kind of the candicate, for example, function,
 	// class, keywords etc.
 	Kind string
+	// TextFormat defines whether the insert text in a completion item 
+	// should be interpreted as plain text or a snippet. The possible values are
+	// PlainText or Snippet.
+	TextFormat string
 }
 
 // TextEdit is the text with range info to be

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"image"
 	"slices"
+	"strings"
 	"time"
 
 	"gioui.org/io/key"
@@ -229,21 +230,25 @@ func (dc *DefaultCompletion) OnConfirm(idx int) {
 	candidate := dc.candidates[idx]
 	editRange := candidate.TextEdit.EditRange
 	if editRange == (gvcode.EditRange{}) {
-		// No range is set, invalid candidate.
-		logger.Error("No range is set, invalid candidate")
-		return
-	} else {
-		caretStart, caretEnd := editRange.Start.Runes, editRange.End.Runes
-
-		// Assume line/column is set, convert the line/column position to rune offsets.
-		if caretStart <= 0 && caretEnd <= 0 {
-			caretStart = dc.Editor.ConvertPos(editRange.Start.Line, editRange.Start.Column)
-			caretEnd = dc.Editor.ConvertPos(editRange.End.Line, editRange.End.Column)
-		}
-		// set the selection using range provided by the completor.
-		dc.Editor.SetCaret(caretStart, caretEnd)
+		editRange = dc.session.PrefixRange()
 	}
 
-	dc.Editor.Insert(candidate.TextEdit.NewText)
+	caretStart, caretEnd := editRange.Start.Runes, editRange.End.Runes
+	// Assume line/column is set, convert the line/column position to rune offsets.
+	if caretStart <= 0 && caretEnd <= 0 {
+		caretStart = dc.Editor.ConvertPos(editRange.Start.Line, editRange.Start.Column)
+		caretEnd = dc.Editor.ConvertPos(editRange.End.Line, editRange.End.Column)
+	}
+	// set the selection using range provided by the completor.
+	dc.Editor.SetCaret(caretStart, caretEnd)
+
+	if strings.ToLower(candidate.TextFormat) == "snippet" {
+		_, err := dc.Editor.InsertSnippet(candidate.TextEdit.NewText)
+		if err != nil {
+			logger.Error("insert snippet failed", "error", err)
+		}
+	} else {
+		dc.Editor.Insert(candidate.TextEdit.NewText)
+	}
 	dc.Cancel()
 }

@@ -28,6 +28,9 @@ type session struct {
 	canceled bool
 	// buffered text while the user types.
 	buf []rune
+	// input range of the cursor since when the session started and when completion
+	// confirmed.
+	prefixRange gvcode.EditRange
 }
 
 func newSession(completor *delegatedCompletor, kind triggerKind) *session {
@@ -65,6 +68,14 @@ func (s *session) Update(ctx gvcode.CompletionContext) {
 
 	s.ctx = ctx
 	s.buf = append(s.buf, []rune(ctx.Input)...)
+	if s.prefixRange == (gvcode.EditRange{}) {
+		start := ctx.Position
+		start.Column = max(0, start.Column-len([]rune(ctx.Input)))
+		start.Runes = 0
+		s.prefixRange.Start = start
+	}
+	s.prefixRange.End = ctx.Position
+	s.prefixRange.End.Runes = 0
 }
 
 func (s *session) makeInvalid() {
@@ -78,6 +89,10 @@ func (s *session) IsValid() bool {
 // bufferedText returns text buffered since the session is triggered.
 func (s *session) BufferedText() string {
 	return string(s.buf)
+}
+
+func (s *session) PrefixRange() gvcode.EditRange {
+	return s.prefixRange
 }
 
 func (s *session) Completor() *delegatedCompletor {
