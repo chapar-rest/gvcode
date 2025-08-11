@@ -208,14 +208,8 @@ func (d *DecorationTree) QueryRange(start, end int) []Decoration {
 }
 
 func (d *DecorationTree) RemoveBySource(source string) error {
-	maxVals, found := d.tree.MaxEnd()
-	if !found {
-		return errors.New("no decoration found")
-	}
-
-	end := maxVals[0].End
-	all, found := d.tree.AllIntersections(0, end)
-	if !found {
+	all := d.getAllNodes()
+	if all == nil {
 		return errors.New("no decoration found")
 	}
 
@@ -237,15 +231,9 @@ func (d *DecorationTree) RemoveBySource(source string) error {
 }
 
 func (d *DecorationTree) RemoveAll() error {
-	maxVals, found := d.tree.MaxEnd()
-	if !found {
-		return nil
-	}
-
-	end := maxVals[0].End
-	all, found := d.tree.AllIntersections(0, end)
-	if !found {
-		return nil
+	all := d.getAllNodes()
+	if all == nil {
+		return errors.New("no decoration found")
 	}
 
 	for _, deco := range all {
@@ -260,20 +248,25 @@ func (d *DecorationTree) RemoveAll() error {
 	return nil
 }
 
-// Refresh checks if any decoration range has changed and rebuilds the interval
-// tree if necessary.
-func (d *DecorationTree) Refresh() {
+func (d *DecorationTree) getAllNodes() []Decoration {
 	maxVals, found := d.tree.MaxEnd()
 	if !found {
-		return
+		return nil
 	}
 
 	end := maxVals[0].End
 	all, found := d.tree.AllIntersections(0, end)
 	if !found {
-		return
+		return nil
 	}
 
+	return all
+}
+
+// Refresh checks if any decoration range has changed and rebuilds the interval
+// tree if necessary.
+func (d *DecorationTree) Refresh() {
+	all := d.getAllNodes()
 	invalid := false
 
 	// check all decorations to see if refresh is needed.
