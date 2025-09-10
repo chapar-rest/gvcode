@@ -44,21 +44,23 @@ func newSnippetContext(editor *Editor) *snippetContext {
 	return sc
 }
 
-func (sc *snippetContext) setSnippet(body string) (int, error) {
-	sc.currentIdx = -1
-	sc.state = snippet.NewSnippet(body)
-	err := sc.state.Parse()
-	if err != nil {
-		return 0, err
+func (sc *snippetContext) SetSnippet(snp *snippet.Snippet) (int, error) {
+	if snp == nil {
+		return 0, errors.New("invalid snippet")
 	}
 
-	runes := sc.editor.Insert(sc.state.Template())
+	sc.currentIdx = -1
+	sc.state = snp
+
+	tmpl := sc.state.Template()
+	runes := sc.editor.Insert(tmpl)
+
 	// move caret to the begining of the text.
 	sc.editor.MoveCaret(-runes, -runes)
 	// record the initial position of the snippet.
 	sc.origin, _ = sc.editor.Selection()
 
-	err = sc.addDecorations()
+	err := sc.addDecorations()
 	if err != nil {
 		return 0, fmt.Errorf("add decoration failed: %w", err)
 	}
@@ -102,6 +104,17 @@ func (sc *snippetContext) PrevTabStop() error {
 		// Reached the end of the tabstops
 		sc.editor.setMode(ModeNormal)
 		return nil
+	}
+}
+
+func (sc *snippetContext) OnInsertAt(runeOff int) {
+	if sc == nil || sc.state == nil {
+		return
+	}
+
+	start, end := sc.getTabStopPosition(sc.currentIdx)
+	if runeOff < start || runeOff >= end {
+		sc.Cancel()
 	}
 }
 
@@ -150,7 +163,7 @@ func (sc *snippetContext) addDecorations() error {
 	return nil
 }
 
-func (sc *snippetContext) cancel() {
+func (sc *snippetContext) Cancel() {
 	sc.editor.ClearDecorations(snippetModeDeco)
 	sc.markers = sc.markers[:0]
 	sc.state = nil
@@ -160,29 +173,30 @@ func (sc *snippetContext) cancel() {
 }
 
 func (e *Editor) InsertSnippet(body string) (insertedRunes int, err error) {
+	snp := snippet.NewSnippet(body)
+	err = snp.Parse()
+	if err != nil {
+		return 0, err
+	}
+
 	if e.mode == ModeSnippet {
 		// An ongoing snippet session exists. To avoid nested snippet editing,
 		// we try to insert the snippet body as plain text.
-		snp := snippet.NewSnippet(body)
-		err := snp.Parse()
-		if err != nil {
-			return 0, err
-		}
-
 		runes := e.Insert(snp.Template())
 		return runes, nil
 	}
 
+	if snp.Template() == body {
+		runes := e.Insert(snp.Template())
+		return runes, nil
+	}
+
+	if e.snippetCtx != nil {
+		e.snippetCtx.Cancel()
+	}
+
 	e.snippetCtx = newSnippetContext(e)
-	err = e.setMode(ModeSnippet)
-	if err != nil {
-		return
-	}
-
-	insertedRunes, err = e.snippetCtx.setSnippet(body)
-	if err != nil {
-		return
-	}
-
+	e.setMode(ModeSnippet)
+	insertedRunes, err = e.snippetCtx.SetSnippet(snp)
 	return
 }

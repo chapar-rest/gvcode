@@ -1,7 +1,5 @@
 package gvcode
 
-import "errors"
-
 // Mode defines a mode for the editor. The editor can be switched
 // back and forth bewteen different modes, depending on the context.
 type EditorMode uint8
@@ -26,33 +24,14 @@ const (
 	ModeSnippet
 )
 
-func (e *Editor) setMode(mode EditorMode) error {
-	cancelSnippetMode := func() error {
-		if e.mode == ModeSnippet {
-			if e.snippetCtx == nil {
-				return errors.New("snippet context is not initialized")
-			}
-
-			e.snippetCtx.cancel()
+func (e *Editor) setMode(mode EditorMode) {
+	switch mode {
+	case ModeNormal, ModeReadOnly:
+		if e.snippetCtx != nil {
+			e.snippetCtx.Cancel()
 			e.snippetCtx = nil
 		}
-		return nil
-	}
-
-	switch mode {
-	case ModeNormal:
-		if err := cancelSnippetMode(); err != nil {
-			return err
-		}
-
-	case ModeReadOnly:
-		if err := cancelSnippetMode(); err != nil {
-			return err
-		}
-	case ModeSnippet:
-		//
 	}
 
 	e.mode = mode
-	return nil
 }

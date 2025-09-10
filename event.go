@@ -403,6 +403,10 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 	e.text.MoveCaret(0, 0)
 	// start to auto-complete, if there is a configured Completion.
 	e.updateCompletor(ke.Text, false)
+
+	// If there is an ongoing snippet context, check if the edit is inside of
+	// a tabstop.
+	e.snippetCtx.OnInsertAt(ke.Range.Start)
 }
 
 func (e *Editor) updateCompletor(input string, cancel bool) {

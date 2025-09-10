@@ -60,8 +60,6 @@ type Snippet struct {
 	template  string
 	tabStops  []TabStop
 	locations map[int]runesOff
-	// location of $0 in snippet.
-	finalLoc runesOff
 }
 
 func NewSnippet(content string) *Snippet {
@@ -72,6 +70,12 @@ func (s *Snippet) Parse() error {
 	err := s.parseTabstops()
 	if err != nil {
 		return err
+	}
+
+	if len(s.tabStops) == 0 || !s.tabStops[len(s.tabStops)-1].IsFinal() {
+		snippetLen := len(s.raw)
+		final := TabStop{idx: 0, location: bytesOff{start: snippetLen, end: snippetLen}}
+		s.tabStops = append(s.tabStops, final)
 	}
 
 	s.buildTemplate()
@@ -247,10 +251,6 @@ func (s *Snippet) buildTemplate() {
 					bytesOffDelta+st.location.start,
 					bytesOffDelta+st.location.end)
 				bytesOffDelta += delta
-			}
-
-			if st.idx == 0 {
-				s.finalLoc = offset
 			}
 		}
 
