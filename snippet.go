@@ -107,15 +107,20 @@ func (sc *snippetContext) PrevTabStop() error {
 	}
 }
 
-func (sc *snippetContext) OnInsertAt(runeOff int) {
+func (sc *snippetContext) OnInsertAt(runeStart, runeEnd int) {
+	if runeStart > runeEnd {
+		runeStart, runeEnd = runeEnd, runeStart
+	}
+
 	if sc == nil || sc.state == nil {
 		return
 	}
 
 	start, end := sc.getTabStopPosition(sc.currentIdx)
-	if runeOff < start || runeOff >= end {
-		sc.Cancel()
+	if runeStart < start || runeEnd > end {
+		sc.editor.setMode(ModeNormal)
 	}
+
 }
 
 func (sc *snippetContext) getTabStopPosition(idx int) (int, int) {

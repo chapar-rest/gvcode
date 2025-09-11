@@ -72,7 +72,17 @@ func (s *Snippet) Parse() error {
 		return err
 	}
 
-	if len(s.tabStops) == 0 || !s.tabStops[len(s.tabStops)-1].IsFinal() {
+	addFinal := false
+	if len(s.tabStops) == 0 {
+		addFinal = true
+	} else {
+		lastTabStop := s.tabStops[len(s.tabStops)-1]
+		if !lastTabStop.IsFinal() && lastTabStop.location.end != len(s.raw) {
+			addFinal = true
+		}
+	}
+
+	if addFinal {
 		snippetLen := len(s.raw)
 		final := TabStop{idx: 0, location: bytesOff{start: snippetLen, end: snippetLen}}
 		s.tabStops = append(s.tabStops, final)
