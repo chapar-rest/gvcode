@@ -277,11 +277,11 @@ func TestGroupOp(t *testing.T) {
 }
 
 func TestMarkerOnInsert(t *testing.T) {
-	setup := func(bais MarkerBias) (*PieceTable, *Marker) {
+	setup := func(bais MarkerBias, markerPos int) (*PieceTable, *Marker) {
 		pt := NewPieceTable([]byte("hello,world"))
-		marker, _ := pt.CreateMarker(6, bais)
+		marker, _ := pt.CreateMarker(markerPos, bais)
 
-		if marker.Offset() != 6 {
+		if marker.Offset() != markerPos {
 			t.Logf("initOffset: %d", marker.Offset())
 			t.FailNow()
 		}
@@ -292,44 +292,63 @@ func TestMarkerOnInsert(t *testing.T) {
 		insertOffset     int
 		bais             MarkerBias
 		wantMarkerOffset int
+		marker           int
 	}{
 		{
 			insertOffset:     4,
 			bais:             BiasForward, // any value is ok
 			wantMarkerOffset: 12,
+			marker:           6,
 		},
 		{
 			insertOffset:     4,
 			bais:             BiasBackward, // any value is ok
 			wantMarkerOffset: 12,
+			marker:           6,
 		},
 		{
 			insertOffset:     6,
 			bais:             BiasForward,
 			wantMarkerOffset: 12,
+			marker:           6,
 		},
 
 		{
 			insertOffset:     6,
 			bais:             BiasBackward,
 			wantMarkerOffset: 6,
+			marker:           6,
 		},
 
 		{
 			insertOffset:     7,
 			bais:             BiasForward, // any value is ok
 			wantMarkerOffset: 6,
+			marker:           6,
 		},
 		{
 			insertOffset:     7,
 			bais:             BiasBackward, // any value is ok
 			wantMarkerOffset: 6,
+			marker:           6,
+		},
+		{
+			insertOffset:     0,
+			bais:             BiasBackward,
+			wantMarkerOffset: 0,
+			marker:           0,
+		},
+		{
+			insertOffset:     0,
+			bais:             BiasForward,
+			wantMarkerOffset: 6,
+			marker:           0,
 		},
 	}
 
 	for idx, tc := range testcases {
 		t.Run(fmt.Sprintf("%d-offset:%d", idx, tc.insertOffset), func(t *testing.T) {
-			pt, marker := setup(tc.bais)
+			pt, marker := setup(tc.bais, tc.marker)
 			pt.Replace(tc.insertOffset, tc.insertOffset, "golang")
 
 			newOffset := marker.Offset()

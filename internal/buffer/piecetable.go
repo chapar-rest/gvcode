@@ -232,6 +232,8 @@ func (pt *PieceTable) insertAtBoundary(runeIndex int, text string, oldPiece *pie
 
 	newPieces := &pieceRange{}
 	newPieces.Append(newPiece)
+	pt.updateMarkersOnSplit(oldPiece, 0, oldPiece.prev, oldPiece)
+
 	// swap link the new piece into the sequence
 	pt.push2UndoStack(oldPieces, newPieces)
 	pt.seqLength += textRunes
@@ -644,9 +646,10 @@ func (pt *PieceTable) updateMarkersOnSplit(oldPiece *piece, splitOffset int, lef
 			marker.update(rightPiece, marker.pieceOffset-splitOffset)
 		} else {
 			// Marker is exactly at the split point, use bias.
-			if marker.bias == BiasBackward {
+			switch marker.bias {
+			case BiasBackward:
 				marker.update(leftPiece, leftPiece.length)
-			} else {
+			case BiasForward:
 				// bais is forward
 				marker.update(rightPiece, 0)
 			}
