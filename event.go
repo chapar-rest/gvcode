@@ -532,7 +532,7 @@ func (e *Editor) onDeleteBackward() {
 		if inserted, exists := e.autoInsertions[start]; exists {
 			defer delete(e.autoInsertions, start)
 			counterpart, isOpening := e.text.BracketsQuotes.GetCounterpart(inserted)
-			if !isOpening && counterpart > 0 {
+			if !isOpening && counterpart > 0 || inserted == counterpart {
 				if prev == counterpart {
 					e.text.MoveCaret(-1, 1)
 				}
