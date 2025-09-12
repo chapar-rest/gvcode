@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// deferredRunner implements a runner that is executed  should be bound to a dedicated editor.
+// deferredRunner implements a runner that is executed
 type deferredRunner[T any] struct {
 	delay      time.Duration
 	timer      *time.Timer

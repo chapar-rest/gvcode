@@ -16,7 +16,7 @@ const (
 
 type triggerState struct {
 	triggerKind triggerKind
-	// the actived completor.
+	// the activated completor.
 	completor *delegatedCompletor
 }
 

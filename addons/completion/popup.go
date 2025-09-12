@@ -4,6 +4,7 @@ import (
 	"image"
 	"image/color"
 
+	"gioui.org/font"
 	"gioui.org/io/event"
 	"gioui.org/io/key"
 	"gioui.org/io/pointer"
@@ -229,16 +230,20 @@ func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items
 							Alignment: layout.Middle,
 						}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								return material.Label(th, pop.TextSize*0.75, c.Kind).Layout(gtx)
+								return material.Label(th, pop.TextSize-1, c.Kind).Layout(gtx)
 							}),
 							layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								return material.Label(th, pop.TextSize, c.Label).Layout(gtx)
+								lb := material.Label(th, pop.TextSize, c.Label)
+								lb.Font.Weight = font.SemiBold
+								return lb.Layout(gtx)
+
 							}),
 						)
 					}),
+					layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						lb := material.Label(th, pop.TextSize*0.75, c.Description)
+						lb := material.Label(th, pop.TextSize-1, c.Description)
 						lb.Color = adjustAlpha(th.Fg, 200)
 						lb.MaxLines = 1
 						return lb.Layout(gtx)
