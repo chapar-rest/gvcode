@@ -33,7 +33,9 @@ type CompletionPopup struct {
 	// TextSize configures the size the text displayed in the popup. If no value
 	// is provided, a reasonable value is set.
 	TextSize unit.Sp
-	Theme    *material.Theme
+	// Color used to highlight the selected item.
+	HighlightColor color.NRGBA
+	Theme          *material.Theme
 }
 
 func NewCompletionPopup(editor *gvcode.Editor, cmp gvcode.Completion) *CompletionPopup {
@@ -211,8 +213,11 @@ func (pop *CompletionPopup) layout(gtx layout.Context, th *material.Theme, items
 
 	return li.Layout(gtx, len(items), func(gtx layout.Context, index int) layout.Dimensions {
 		c := items[index]
-
-		return pop.labels[index].Layout(gtx, th, func(gtx layout.Context) layout.Dimensions {
+		highlightColor := pop.HighlightColor
+		if highlightColor == (color.NRGBA{}) {
+			highlightColor = adjustAlpha(th.ContrastBg, 0x60)
+		}
+		return pop.labels[index].Layout(gtx, highlightColor, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{
 				Top:    unit.Dp(2),
 				Bottom: unit.Dp(2),
@@ -295,7 +300,7 @@ func (l *itemLabel) Click() {
 	l.state.Click()
 }
 
-func (l *itemLabel) Layout(gtx layout.Context, th *material.Theme, w layout.Widget) layout.Dimensions {
+func (l *itemLabel) Layout(gtx layout.Context, highlightColor color.NRGBA, w layout.Widget) layout.Dimensions {
 	l.update(gtx)
 
 	macro := op.Record(gtx.Ops)
@@ -307,9 +312,9 @@ func (l *itemLabel) Layout(gtx layout.Context, th *material.Theme, w layout.Widg
 
 			var fill color.NRGBA
 			if l.selected {
-				fill = adjustAlpha(th.Palette.ContrastBg, 0xb6)
+				fill = highlightColor
 			} else if l.hovering {
-				fill = adjustAlpha(th.Palette.ContrastBg, 0x30)
+				fill = adjustAlpha(highlightColor, 0x30)
 			}
 
 			rect := clip.Rect{
