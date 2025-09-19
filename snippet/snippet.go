@@ -72,26 +72,10 @@ func (s *Snippet) Parse() error {
 		return err
 	}
 
-	addFinal := false
-	if len(s.tabStops) == 0 {
-		addFinal = true
-	} else {
-		lastTabStop := s.tabStops[len(s.tabStops)-1]
-		if !lastTabStop.IsFinal() && lastTabStop.location.end != len(s.raw) {
-			addFinal = true
-		}
-	}
-
-	if addFinal {
-		snippetLen := len(s.raw)
-		final := TabStop{idx: 0, location: bytesOff{start: snippetLen, end: snippetLen}}
-		s.tabStops = append(s.tabStops, final)
-	}
-
 	s.buildTemplate()
 
 	// sort by idx in ascending order and specially:
-	// 	1. put variables at the behind of the slice.
+	// 	1. put variables at the end of the slice.
 	//  2. then followed by $0 tabstops.
 	slices.SortFunc(s.tabStops, func(a, b TabStop) int {
 		if a.IsFinal() && !b.IsFinal() {
@@ -112,6 +96,22 @@ func (s *Snippet) Parse() error {
 
 		return cmp.Compare(a.idx, b.idx)
 	})
+
+	addFinal := false
+	if len(s.tabStops) == 0 {
+		addFinal = true
+	} else {
+		lastTabStop := s.tabStops[len(s.tabStops)-1]
+		if !lastTabStop.IsFinal() && lastTabStop.location.end != len(s.raw) {
+			addFinal = true
+		}
+	}
+
+	if addFinal {
+		snippetLen := len(s.raw)
+		final := TabStop{idx: 0, location: bytesOff{start: snippetLen, end: snippetLen}}
+		s.tabStops = append(s.tabStops, final)
+	}
 
 	return nil
 }
