@@ -619,8 +619,9 @@ func (pt *PieceTable) CreateMarker(runeOff int, bais MarkerBias) (*Marker, error
 	defer pt.mu.Unlock()
 
 	p, inRuneOff := pt.pieces.FindPiece(runeOff)
-	if *p == (piece{}) {
-		return nil, fmt.Errorf("invalid runeOff: %d", runeOff)
+	if p == pt.pieces.tail {
+		p = pt.pieces.Tail()
+		inRuneOff = p.length
 	}
 	marker := newMarker(p, inRuneOff, bais)
 	pt.markers = append(pt.markers, marker)

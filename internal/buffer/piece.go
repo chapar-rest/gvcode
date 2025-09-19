@@ -89,7 +89,8 @@ func (pl *pieceList) Append(newPiece *piece) {
 }
 
 // findPiece finds a piece by a runeIndex in the sequence/document, returning
-// the found piece and it rune offset in the found piece.
+// the found piece and it rune offset in the found piece. If the runeIndex reaches
+// the end of the piece chain, the sentinal tail piece is returned.
 func (pl *pieceList) FindPiece(runeIndex int) (p *piece, offset int) {
 	if runeIndex <= 0 {
 		return pl.head.next, 0
