@@ -7,7 +7,7 @@ import (
 
 func (e *TextView) AddDecorations(styles ...decoration.Decoration) error {
 	if e.decorations == nil {
-		panic("TextView is not properly  initialized.")
+		panic("TextView is not properly initialized.")
 	}
 
 	return e.decorations.Insert(styles...)
@@ -15,7 +15,7 @@ func (e *TextView) AddDecorations(styles ...decoration.Decoration) error {
 
 func (e *TextView) ClearDecorations(source string) error {
 	if e.decorations == nil {
-		panic("TextView is not properly  initialized.")
+		panic("TextView is not properly initialized.")
 	}
 
 	if source == "" {

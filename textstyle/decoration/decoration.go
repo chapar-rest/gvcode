@@ -209,10 +209,6 @@ func (d *DecorationTree) QueryRange(start, end int) []Decoration {
 
 func (d *DecorationTree) RemoveBySource(source string) error {
 	all := d.getAllNodes()
-	if all == nil {
-		return errors.New("no decoration found")
-	}
-
 	for _, deco := range all {
 		if deco.Source == source {
 			err := d.tree.Delete(deco.Start, deco.End)
@@ -232,10 +228,6 @@ func (d *DecorationTree) RemoveBySource(source string) error {
 
 func (d *DecorationTree) RemoveAll() error {
 	all := d.getAllNodes()
-	if all == nil {
-		return errors.New("no decoration found")
-	}
-
 	for _, deco := range all {
 		err := d.tree.Delete(deco.Start, deco.End)
 		if err != nil {
