@@ -58,8 +58,8 @@ type Snippet struct {
 	raw string
 	// A template is the 'default' content inserted into the editor.
 	template  string
-	tabStops  []TabStop
-	locations map[int]runesOff
+	tabStops  []*TabStop
+	locations map[*TabStop]runesOff
 }
 
 func NewSnippet(content string) *Snippet {
@@ -77,7 +77,7 @@ func (s *Snippet) Parse() error {
 	// sort by idx in ascending order and specially:
 	// 	1. put variables at the end of the slice.
 	//  2. then followed by $0 tabstops.
-	slices.SortFunc(s.tabStops, func(a, b TabStop) int {
+	slices.SortFunc(s.tabStops, func(a, b *TabStop) int {
 		if a.IsFinal() && !b.IsFinal() {
 			return 1
 		} else if !a.IsFinal() && b.IsFinal() {
@@ -102,15 +102,17 @@ func (s *Snippet) Parse() error {
 		addFinal = true
 	} else {
 		lastTabStop := s.tabStops[len(s.tabStops)-1]
-		if !lastTabStop.IsFinal() && lastTabStop.location.end != len(s.raw) {
+		if !lastTabStop.IsFinal() {
 			addFinal = true
 		}
 	}
 
 	if addFinal {
 		snippetLen := len(s.raw)
-		final := TabStop{idx: 0, location: bytesOff{start: snippetLen, end: snippetLen}}
+		final := &TabStop{idx: 0, location: bytesOff{start: snippetLen, end: snippetLen}}
 		s.tabStops = append(s.tabStops, final)
+		templateRunes := utf8.RuneCountInString(s.template)
+		s.locations[final] = runesOff{start: templateRunes, end: templateRunes}
 	}
 
 	return nil
@@ -132,7 +134,7 @@ func (s *Snippet) parseTabstops() error {
 				return err
 			}
 
-			ts := TabStop{
+			ts := &TabStop{
 				content:  content,
 				idx:      tabStopIdx,
 				location: bytesOff{start: matches[0], end: matches[1]},
@@ -144,7 +146,7 @@ func (s *Snippet) parseTabstops() error {
 		// check the second sub capture group.
 		if matches[6] >= 0 && matches[7] >= 0 {
 			// A variable name is found.
-			ts := TabStop{
+			ts := &TabStop{
 				content:  content,
 				variable: s.raw[matches[6]:matches[7]],
 				location: bytesOff{start: matches[0], end: matches[1]},
@@ -157,7 +159,7 @@ func (s *Snippet) parseTabstops() error {
 		// with default value and choices.
 		if matches[8] >= 0 && matches[9] >= 0 {
 			matchedText := s.raw[matches[8]:matches[9]]
-			ts := TabStop{
+			ts := &TabStop{
 				content:  content,
 				location: bytesOff{start: matches[0], end: matches[1]},
 			}
@@ -175,7 +177,7 @@ func (s *Snippet) parseTabstops() error {
 	return nil
 }
 
-func (s *Snippet) parseSubText(tabstop TabStop, subtext string) (TabStop, error) {
+func (s *Snippet) parseSubText(tabstop *TabStop, subtext string) (*TabStop, error) {
 	idx := strings.Index(subtext, ":")
 	if idx > 0 && idx <= len(subtext)-1 {
 		prefix := subtext[0:idx]
@@ -198,7 +200,7 @@ func (s *Snippet) parseSubText(tabstop TabStop, subtext string) (TabStop, error)
 		// The text defines a tabstop with choices
 		tabstopIdx, err := strconv.Atoi(subtext[0:startPipeIdx])
 		if err != nil {
-			return TabStop{}, err
+			return nil, err
 		}
 		choiceStr := subtext[startPipeIdx+1 : endPipeIdx]
 		tabstop.idx = tabstopIdx
@@ -206,13 +208,13 @@ func (s *Snippet) parseSubText(tabstop TabStop, subtext string) (TabStop, error)
 		return tabstop, nil
 	}
 
-	return TabStop{}, errors.New("invalid subtext format")
+	return nil, errors.New("invalid subtext format")
 }
 
 func (s *Snippet) buildTemplate() {
 	s.template = s.raw
 	if s.locations == nil {
-		s.locations = make(map[int]runesOff)
+		s.locations = make(map[*TabStop]runesOff)
 	} else {
 		clear(s.locations)
 	}
@@ -223,7 +225,7 @@ func (s *Snippet) buildTemplate() {
 	}
 
 	bytesOffDelta := 0
-	for i, st := range s.tabStops {
+	for _, st := range s.tabStops {
 		var updatedStr string
 		var offset runesOff
 		var delta int
@@ -265,15 +267,19 @@ func (s *Snippet) buildTemplate() {
 		}
 
 		s.template = updatedStr
-		s.locations[i] = offset
+		s.locations[st] = offset
 	}
+}
+
+func (s *Snippet) Raw() string {
+	return s.raw
 }
 
 func (s *Snippet) Template() string {
 	return s.template
 }
 
-func (s *Snippet) TabStops() []TabStop {
+func (s *Snippet) TabStops() []*TabStop {
 	return s.tabStops
 }
 
@@ -281,7 +287,7 @@ func (s *Snippet) TabStopSize() int {
 	return len(s.tabStops)
 }
 
-func (s *Snippet) TabStopAt(idx int) TabStop {
+func (s *Snippet) TabStopAt(idx int) *TabStop {
 	idx = max(0, idx)
 	idx = min(idx, len(s.tabStops)-1)
 	return s.tabStops[idx]
@@ -290,7 +296,8 @@ func (s *Snippet) TabStopAt(idx int) TabStop {
 func (s *Snippet) TabStopOff(idx int) (int, int) {
 	idx = max(0, idx)
 	idx = min(idx, len(s.tabStops)-1)
-	loc := s.locations[idx]
+	ts := s.tabStops[idx]
+	loc := s.locations[ts]
 	return loc.start, loc.end
 }
 
