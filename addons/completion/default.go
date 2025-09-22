@@ -14,6 +14,7 @@ import (
 
 var _ gvcode.Completion = (*DefaultCompletion)(nil)
 
+// DefaultCompletion is a built-in implementation of the gvcode.Completion API.
 type DefaultCompletion struct {
 	Editor     *gvcode.Editor
 	runner     *deferredRunner[gvcode.CompletionCandidate]
@@ -166,7 +167,8 @@ func (dc *DefaultCompletion) runCompletor(ctx gvcode.CompletionContext) []gvcode
 		return nil
 	}
 
-	return completor.Suggest(ctx)
+	candidates := completor.Suggest(ctx)
+	return completor.FilterAndRank(dc.session.BufferedText(), candidates)
 
 }
 

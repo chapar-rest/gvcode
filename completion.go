@@ -77,7 +77,7 @@ type CompletionCandidate struct {
 	// Kind of the candicate, for example, function,
 	// class, keywords etc.
 	Kind string
-	// TextFormat defines whether the insert text in a completion item 
+	// TextFormat defines whether the insert text in a completion item
 	// should be interpreted as plain text or a snippet. The possible values are
 	// PlainText or Snippet.
 	TextFormat string
@@ -114,6 +114,10 @@ func NewTextEditWithPos(text string, start Position, end Position) TextEdit {
 type Completor interface {
 	Trigger() Trigger
 	Suggest(ctx CompletionContext) []CompletionCandidate
+
+	// FilterAndRank filters the passed in candidates using the pattern, and then
+	// rank the result.
+	FilterAndRank(pattern string, candidates []CompletionCandidate) []CompletionCandidate
 }
 
 // Trigger

@@ -309,3 +309,7 @@ func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionC
 
 	return candicates
 }
+
+func (c *goCompletor) FilterAndRank(pattern string, candidates []gvcode.CompletionCandidate) []gvcode.CompletionCandidate {
+	return candidates
+}
