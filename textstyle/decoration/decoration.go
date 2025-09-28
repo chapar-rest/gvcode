@@ -220,7 +220,11 @@ func (d *DecorationTree) RemoveBySource(source string) error {
 	}
 
 	d.emptyDecos = slices.DeleteFunc(d.emptyDecos, func(deco Decoration) bool {
-		return deco.Source == source
+		if deco.Source == source {
+			deco.clear(d.src)
+			return true
+		}
+		return false
 	})
 
 	return nil
@@ -233,6 +237,10 @@ func (d *DecorationTree) RemoveAll() error {
 		if err != nil {
 			return err
 		}
+		deco.clear(d.src)
+	}
+
+	for _, deco := range d.emptyDecos {
 		deco.clear(d.src)
 	}
 	d.emptyDecos = d.emptyDecos[:0]

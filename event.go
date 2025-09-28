@@ -368,10 +368,6 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 		e.autoInsertions = make(map[int]rune)
 	}
 
-	// If there is an ongoing snippet context, check if the edit is inside of
-	// a tabstop.
-	e.snippetCtx.OnInsertAt(ke.Range.End, ke.Range.Start)
-
 	// check if the input character is a bracket or a quote.
 	r := []rune(ke.Text)[0]
 	counterpart, isOpening := e.text.BracketsQuotes.GetCounterpart(r)
@@ -407,6 +403,12 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 	e.text.MoveCaret(0, 0)
 	// start to auto-complete, if there is a configured Completion.
 	e.updateCompletor(ke.Text, false)
+
+	// If there is an ongoing snippet context, check if the edit is inside of
+	// a tabstop.
+	finalStart, finalEnd := e.Selection()
+	e.snippetCtx.OnInsertAt(finalStart, finalEnd)
+
 }
 
 func (e *Editor) updateCompletor(input string, cancel bool) {

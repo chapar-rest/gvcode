@@ -80,13 +80,16 @@ func (sc *snippetContext) NextTabStop() error {
 	if sc.currentIdx < sc.state.TabStopSize() {
 		start, end := sc.getTabStopPosition(sc.currentIdx)
 		sc.editor.SetCaret(end, start)
-		return nil
-	} else {
-		// Reached the end of the tabstops
-		sc.editor.setMode(ModeNormal)
-		return nil
 	}
 
+	currentTabStop := sc.state.TabStopAt(sc.currentIdx)
+
+	if sc.currentIdx >= sc.state.TabStopSize() || currentTabStop.IsFinal() {
+		// Reached the end of the tabstops
+		sc.editor.setMode(ModeNormal)
+	}
+
+	return nil
 }
 
 func (sc *snippetContext) PrevTabStop() error {
@@ -117,7 +120,7 @@ func (sc *snippetContext) OnInsertAt(runeStart, runeEnd int) {
 	}
 
 	start, end := sc.getTabStopPosition(sc.currentIdx)
-	if runeStart < start || runeEnd > end {
+	if runeStart < start || runeEnd > end+1 {
 		sc.editor.setMode(ModeNormal)
 	}
 
