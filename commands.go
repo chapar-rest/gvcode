@@ -176,7 +176,6 @@ func (e *Editor) buildBuiltinCommands() {
 					}
 				} else {
 					if e.Delete(-1) != 0 {
-						e.updateCompletor("", true)
 						return ChangeEvent{}
 					}
 				}
@@ -186,7 +185,7 @@ func (e *Editor) buildBuiltinCommands() {
 
 	registerCommand(key.Filter{Focus: e, Name: key.NameDeleteForward, Optional: key.ModShortcutAlt | key.ModShift},
 		func(gtx layout.Context, evt key.Event) EditorEvent {
-			if e.mode != ModeReadOnly  {
+			if e.mode != ModeReadOnly {
 				moveByWord := evt.Modifiers.Contain(key.ModShortcutAlt)
 				if moveByWord {
 					if e.deleteWord(1) != 0 {
@@ -339,6 +338,9 @@ func (e *Editor) processCommands(gtx layout.Context) EditorEvent {
 				}
 				e.scrollCaret = true
 				e.scroller.Stop()
+				if cmd.tag == nil || cmd.tag == e {
+					e.updateCompletor("", true)
+				}
 
 				if !ke.Modifiers.Contain(cmd.filter.Required) {
 					break

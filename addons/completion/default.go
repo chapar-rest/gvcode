@@ -5,7 +5,6 @@ import (
 	"image"
 	"slices"
 	"strings"
-	"time"
 
 	"gioui.org/io/key"
 	"gioui.org/layout"
@@ -17,7 +16,6 @@ var _ gvcode.Completion = (*DefaultCompletion)(nil)
 // DefaultCompletion is a built-in implementation of the gvcode.Completion API.
 type DefaultCompletion struct {
 	Editor     *gvcode.Editor
-	runner     *deferredRunner[gvcode.CompletionCandidate]
 	completors []*delegatedCompletor
 	candidates []gvcode.CompletionCandidate
 	session    *session
@@ -54,63 +52,7 @@ func (dc *DefaultCompletion) AddCompletor(completor gvcode.Completor, popup gvco
 	}
 
 	dc.completors = append(dc.completors, c)
-	if dc.runner == nil {
-		dc.runner = newRunner[gvcode.CompletionCandidate](0)
-	}
 	return nil
-}
-
-// SetDelay set a delay duration of run completion after the user
-// stopped typing. This makes the UI more responsive when the user
-// types fast as it reduces the unnecessary completion computation.
-func (dc *DefaultCompletion) SetDelay(delay time.Duration) {
-	if dc.runner == nil {
-		dc.runner = newRunner[gvcode.CompletionCandidate](delay)
-	} else {
-		dc.runner.SetDelay(delay)
-	}
-}
-
-func canTrigger(tr gvcode.Trigger, input string) (bool, triggerKind) {
-	// check explicit trigger characters.
-	if slices.Contains(tr.Characters, input) {
-		return true, charTrigger
-	}
-
-	// else check other allowed characters
-	char := []rune(input)[0]
-	if isSymbolChar(char) {
-		return true, autoTrigger
-	}
-
-	return false, 0
-}
-
-func (dc *DefaultCompletion) triggerOnInput(ctx gvcode.CompletionContext) {
-	if dc.session != nil && dc.session.IsValid() {
-		dc.session.Update(ctx)
-		return
-	}
-
-	var completor *delegatedCompletor
-	var kind triggerKind
-
-	for _, cmp := range dc.completors {
-		yes, k := canTrigger(cmp.Trigger(), ctx.Input)
-		if yes {
-			completor = cmp
-			kind = k
-			break
-		}
-	}
-
-	if completor != nil {
-		if dc.session == nil {
-			dc.session = newSession(completor, kind)
-		}
-
-		dc.session.Update(ctx)
-	}
 }
 
 // onKey activates the completor when the registered key binding are pressed.
@@ -134,11 +76,7 @@ func (dc *DefaultCompletion) onKey(evt key.Event) {
 
 	ctx := dc.Editor.GetCompletionContext()
 	dc.session = newSession(cmp, keyTrigger)
-	dc.session.Update(ctx)
-	// Run completor without delay.
-	dc.runner.Async(func() []gvcode.CompletionCandidate {
-		return dc.runCompletor(ctx)
-	})
+	dc.updateCandidates(dc.session.Update(ctx))
 }
 
 func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
@@ -147,46 +85,39 @@ func (dc *DefaultCompletion) OnText(ctx gvcode.CompletionContext) {
 		return
 	}
 
-	dc.triggerOnInput(ctx)
-	if !dc.session.IsValid() {
+	if dc.session != nil && dc.session.IsValid() {
+		dc.updateCandidates(dc.session.Update(ctx))
 		return
 	}
 
-	dc.runner.Run(func() []gvcode.CompletionCandidate {
-		return dc.runCompletor(ctx)
-	})
-}
+	var completor *delegatedCompletor
+	var kind triggerKind
 
-func (dc *DefaultCompletion) runCompletor(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
-	if !dc.session.IsValid() {
-		return nil
-	}
-
-	completor := dc.session.Completor()
-	if completor == nil {
-		return nil
-	}
-
-	candidates := completor.Suggest(ctx)
-	return completor.FilterAndRank(dc.session.BufferedText(), candidates)
-
-}
-
-func (dc *DefaultCompletion) updateCandidates() {
-	select {
-	case items := <-dc.runner.ResultChan():
-		dc.candidates = dc.candidates[:0]
-		dc.candidates = append(dc.candidates, items...)
-		if len(dc.candidates) == 0 {
-			dc.Cancel()
+	for _, cmp := range dc.completors {
+		if canTrigger(cmp.Trigger(), ctx.Input) {
+			completor = cmp
+			kind = charTrigger
+			break
 		}
-	default:
-		// no update
 	}
+
+	if completor != nil {
+		if dc.session == nil || !dc.session.IsValid() {
+			dc.session = newSession(completor, kind)
+		}
+
+		dc.updateCandidates(dc.session.Update(ctx))
+	}
+
+}
+
+func (dc *DefaultCompletion) updateCandidates(candidates []gvcode.CompletionCandidate) {
+	dc.candidates = dc.candidates[:0]
+	dc.candidates = append(dc.candidates, candidates...)
 }
 
 func (dc *DefaultCompletion) IsActive() bool {
-	return dc.session != nil
+	return dc.session != nil && dc.session.IsValid()
 }
 
 func (dc *DefaultCompletion) Offset() image.Point {
@@ -198,8 +129,6 @@ func (dc *DefaultCompletion) Offset() image.Point {
 }
 
 func (dc *DefaultCompletion) Layout(gtx layout.Context) layout.Dimensions {
-	dc.updateCandidates()
-
 	if dc.session == nil {
 		return layout.Dimensions{}
 	}
@@ -207,15 +136,11 @@ func (dc *DefaultCompletion) Layout(gtx layout.Context) layout.Dimensions {
 	completor := dc.session.Completor()
 	// when a session is marked as invalid, we'll have to still layout once to
 	// reset the popup to unregister the event handler.
-	if !dc.session.IsValid() {
-		dc.session = nil
-	}
-
 	return completor.popup.Layout(gtx, dc.candidates)
 }
 
 func (dc *DefaultCompletion) Cancel() {
-	if dc.session != nil {
+	if dc.session != nil && dc.session.IsValid() {
 		dc.session.makeInvalid()
 	}
 	dc.candidates = dc.candidates[:0]
@@ -231,7 +156,9 @@ func (dc *DefaultCompletion) OnConfirm(idx int) {
 
 	candidate := dc.candidates[idx]
 	editRange := candidate.TextEdit.EditRange
-	if editRange == (gvcode.EditRange{}) {
+
+	if editRange == (gvcode.EditRange{}) ||
+		containsRange(dc.session.PrefixRange(), editRange) { // Only handles replace edit now.
 		editRange = dc.session.PrefixRange()
 	}
 
@@ -253,4 +180,29 @@ func (dc *DefaultCompletion) OnConfirm(idx int) {
 		dc.Editor.Insert(candidate.TextEdit.NewText)
 	}
 	dc.Cancel()
+}
+
+func containsRange(r1, r2 gvcode.EditRange) bool {
+	return r1.Start.Runes <= r2.Start.Runes && r1.End.Runes >= r2.End.Runes
+}
+
+func isSymbolChar(ch rune) bool {
+	if (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_' {
+		return true
+	}
+
+	return false
+}
+
+func canTrigger(tr gvcode.Trigger, input string) bool {
+	// check explicit trigger characters.
+	if slices.Contains(tr.Characters, input) {
+		return true
+	}
+
+	// else check other allowed characters
+	return isSymbolChar([]rune(input)[0])
 }

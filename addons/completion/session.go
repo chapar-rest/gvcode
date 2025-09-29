@@ -17,7 +17,9 @@ const (
 type triggerState struct {
 	triggerKind triggerKind
 	// the activated completor.
-	completor *delegatedCompletor
+	completor    *delegatedCompletor
+	triggered    bool
+	triggerChars string
 }
 
 // A session is started when some trigger is activated, and is destroyed when
@@ -27,10 +29,12 @@ type session struct {
 	state    *triggerState
 	canceled bool
 	// buffered text while the user types.
-	buf []rune
+	prefix []rune
 	// input range of the cursor since when the session started and when completion
 	// confirmed.
 	prefixRange gvcode.EditRange
+	// Full candidates from the completor.
+	candidates []gvcode.CompletionCandidate
 }
 
 func newSession(completor *delegatedCompletor, kind triggerKind) *session {
@@ -38,57 +42,70 @@ func newSession(completor *delegatedCompletor, kind triggerKind) *session {
 		state: &triggerState{
 			triggerKind: kind,
 			completor:   completor,
+			triggered:   true,
 		},
 	}
 }
 
-func isSymbolChar(ch rune) bool {
-	if (ch >= 'a' && ch <= 'z') ||
-		(ch >= 'A' && ch <= 'Z') ||
-		(ch >= '0' && ch <= '9') ||
-		ch == '_' {
-		return true
-	}
-
-	return false
+var terminatingChars = []rune{
+	'{', '}', '(', ')', ',', ';', ' ', '\n', '\t',
 }
 
-func (s *session) Update(ctx gvcode.CompletionContext) {
-	if s.canceled {
-		return
+func hasTerminateChar(input string) bool {
+	return slices.Contains(terminatingChars, []rune(input)[0])
+}
+
+func (s *session) Update(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
+	if s.canceled || ctx.Input == "" {
+		return nil
 	}
 
-	if ctx.Input != "" {
-		tr := s.state.completor.Trigger()
-		if !slices.Contains(tr.Characters, ctx.Input) && !isSymbolChar([]rune(ctx.Input)[0]) {
-			s.makeInvalid()
-			return
-		}
+	if s.state.triggered {
+		s.candidates = s.state.completor.Suggest(ctx)
+		s.state.triggerChars = ctx.Input
+		s.state.triggered = false
+		s.prefix = s.prefix[:0]
+		s.prefixRange = gvcode.EditRange{}
+		//log.Printf("triggered new completion, candidates: %d, trigger char: %s", len(s.candidates), s.state.triggerChars)
+	}
+
+	if hasTerminateChar(ctx.Input) {
+		s.makeInvalid()
+		return nil
 	}
 
 	s.ctx = ctx
-	s.buf = append(s.buf, []rune(ctx.Input)...)
-	if s.prefixRange == (gvcode.EditRange{}) {
-		start := ctx.Position
-		start.Column = max(0, start.Column-len([]rune(ctx.Input)))
-		start.Runes = 0
-		s.prefixRange.Start = start
+
+	if isSymbolChar([]rune(s.ctx.Input)[0]) {
+		s.prefix = append(s.prefix, []rune(ctx.Input)...)
+		if s.prefixRange == (gvcode.EditRange{}) {
+			start := ctx.Position
+			start.Column = max(0, start.Column-len([]rune(ctx.Input)))
+			start.Runes = 0
+			s.prefixRange.Start = start
+		}
+		s.prefixRange.End = ctx.Position
+		s.prefixRange.End.Runes = 0
 	}
-	s.prefixRange.End = ctx.Position
-	s.prefixRange.End.Runes = 0
+
+	return s.state.completor.FilterAndRank(string(s.prefix), s.candidates)
+
 }
 
 func (s *session) makeInvalid() {
 	s.canceled = true
+	s.prefix = s.prefix[:0]
+	s.prefixRange = gvcode.EditRange{}
+	s.candidates = s.candidates[:0]
 }
 
 func (s *session) IsValid() bool {
 	return s != nil && s.state != nil && !s.canceled
 }
 
-// bufferedText returns text buffered since the session is triggered.
-func (s *session) BufferedText() string {
-	return string(s.buf)
+// Prefix returns text buffered since the session is triggered.
+func (s *session) Prefix() string {
+	return string(s.prefix)
 }
 
 func (s *session) PrefixRange() gvcode.EditRange {

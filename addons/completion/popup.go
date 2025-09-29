@@ -49,12 +49,8 @@ func (pop *CompletionPopup) Layout(gtx layout.Context, items []gvcode.Completion
 	pop.itemsCount = len(items)
 	pop.update(gtx)
 
-	if !pop.cmp.IsActive() {
+	if !pop.cmp.IsActive() || pop.itemsCount == 0 {
 		pop.reset()
-		return layout.Dimensions{}
-	}
-
-	if pop.itemsCount == 0 {
 		return layout.Dimensions{}
 	}
 
