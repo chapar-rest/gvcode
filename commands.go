@@ -339,7 +339,7 @@ func (e *Editor) processCommands(gtx layout.Context) EditorEvent {
 				e.scrollCaret = true
 				e.scroller.Stop()
 				if cmd.tag == nil || cmd.tag == e {
-					e.updateCompletor("", true)
+					e.cancelCompletor()
 				}
 
 				if !ke.Modifiers.Contain(cmd.filter.Required) {

@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"strings"
+	"unicode/utf8"
 
 	"gioui.org/gesture"
 	"gioui.org/io/clipboard"
@@ -401,8 +402,8 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 	e.scroller.Stop()
 	// Reset caret xoff.
 	e.text.MoveCaret(0, 0)
-	// start to auto-complete, if there is a configured Completion.
-	e.updateCompletor(ke.Text, false)
+	// record lastInput for auto-complete.
+	e.lastInput = ke
 
 	// If there is an ongoing snippet context, check if the edit is inside of
 	// a tabstop.
@@ -411,29 +412,25 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 
 }
 
-func (e *Editor) updateCompletor(input string, cancel bool) {
+func (e *Editor) cancelCompletor() {
 	if e.completor == nil {
 		return
 	}
 
-	if cancel {
-		e.completor.Cancel()
-		return
-	}
-
-	e.completor.OnText(e.currentCompletionCtx(input))
+	e.completor.Cancel()
 }
 
-func (e *Editor) currentCompletionCtx(input string) CompletionContext {
-	ctx := CompletionContext{Input: input}
+func (e *Editor) currentCompletionCtx() CompletionContext {
+	_, end := e.text.Selection()
+	if e.lastInput.Range.End+utf8.RuneCountInString(e.lastInput.Text) != end {
+		return CompletionContext{}
+	}
+
+	ctx := CompletionContext{Input: e.lastInput.Text}
 	ctx.Position.Line, ctx.Position.Column = e.text.CaretPos()
 	// scroll off will change after we update the position, so we use doc
 	// view position instead of viewport position.
 	ctx.Coords = e.text.CaretCoords().Round().Add(e.text.ScrollOff())
-
-	// start and end should be the same, but there's a bug in text.MoveCaret
-	//  that makes start and end unequal, so we use end here.
-	_, end := e.text.Selection()
 	ctx.Position.Runes = end
 	return ctx
 }
@@ -441,7 +438,22 @@ func (e *Editor) currentCompletionCtx(input string) CompletionContext {
 // GetCompletionContext returns a context from the current caret position.
 // This is usually used in the condition of a key triggered completion.
 func (e *Editor) GetCompletionContext() CompletionContext {
-	return e.currentCompletionCtx("")
+	return e.currentCompletionCtx()
+}
+
+// OnTextEdit should be called after normal keyboard input to update the
+// auto completion engine, usually when received a ChangeEvent.
+func (e *Editor) OnTextEdit() {
+	if e.completor == nil {
+		return
+	}
+
+	ctx := e.currentCompletionCtx()
+	if ctx == (CompletionContext{}) {
+		return
+	}
+
+	e.completor.OnText(ctx)
 }
 
 func (e *Editor) onPasteEvent(ke transfer.DataEvent) EditorEvent {
