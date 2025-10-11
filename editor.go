@@ -44,7 +44,7 @@ type Editor struct {
 	onPaste   BeforePasteHook
 	completor Completion
 	// last input when the editor received an EditEvent.
-	lastInput key.EditEvent
+	lastInput *key.EditEvent
 
 	// scratch is a byte buffer that is reused to efficiently read portions of text
 	// from the textView.

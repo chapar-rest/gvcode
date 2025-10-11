@@ -403,7 +403,7 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 	// Reset caret xoff.
 	e.text.MoveCaret(0, 0)
 	// record lastInput for auto-complete.
-	e.lastInput = ke
+	e.lastInput = &ke
 
 	// If there is an ongoing snippet context, check if the edit is inside of
 	// a tabstop.
@@ -422,16 +422,18 @@ func (e *Editor) cancelCompletor() {
 
 func (e *Editor) currentCompletionCtx() CompletionContext {
 	_, end := e.text.Selection()
-	if e.lastInput.Range.End+utf8.RuneCountInString(e.lastInput.Text) != end {
-		return CompletionContext{}
+	input := ""
+	if e.lastInput != nil && e.lastInput.Range.End+utf8.RuneCountInString(e.lastInput.Text) == end {
+		input = e.lastInput.Text
 	}
 
-	ctx := CompletionContext{Input: e.lastInput.Text}
+	ctx := CompletionContext{Input: input}
 	ctx.Position.Line, ctx.Position.Column = e.text.CaretPos()
 	// scroll off will change after we update the position, so we use doc
 	// view position instead of viewport position.
 	ctx.Coords = e.text.CaretCoords().Round().Add(e.text.ScrollOff())
 	ctx.Position.Runes = end
+	e.lastInput = nil
 	return ctx
 }
 
