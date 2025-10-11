@@ -52,11 +52,15 @@ var terminatingChars = []rune{
 }
 
 func hasTerminateChar(input string) bool {
+	if input == "" {
+		return false
+	}
+
 	return slices.Contains(terminatingChars, []rune(input)[0])
 }
 
 func (s *session) Update(ctx gvcode.CompletionContext) []gvcode.CompletionCandidate {
-	if s.canceled || ctx.Input == "" {
+	if s.canceled {
 		return nil
 	}
 
@@ -76,7 +80,7 @@ func (s *session) Update(ctx gvcode.CompletionContext) []gvcode.CompletionCandid
 
 	s.ctx = ctx
 
-	if isSymbolChar([]rune(s.ctx.Input)[0]) {
+	if ctx.Input != "" && isSymbolChar([]rune(s.ctx.Input)[0]) {
 		s.prefix = append(s.prefix, []rune(ctx.Input)...)
 		if s.prefixRange == (gvcode.EditRange{}) {
 			start := ctx.Position
