@@ -9,7 +9,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"gioui.org/app"
 	"gioui.org/font"
@@ -73,6 +72,9 @@ func (ed *EditorApp) layout(gtx C, th *material.Theme) D {
 		case gvcode.ChangeEvent:
 			tokens := HightlightTextByPattern(ed.state.Text(), syntaxPattern)
 			ed.state.SetSyntaxTokens(tokens...)
+			// May also need to sync the editor content to the completion engine before
+			// calling OnTextEdit.
+			ed.state.OnTextEdit()
 		}
 	}
 
@@ -296,13 +298,15 @@ func (c *goCompletor) Suggest(ctx gvcode.CompletionContext) []gvcode.CompletionC
 				Label: kw,
 				TextEdit: gvcode.TextEdit{
 					NewText: kw,
-					EditRange: gvcode.EditRange{
-						Start: gvcode.Position{Runes: ctx.Position.Runes - utf8.RuneCountInString(prefix)},
-						End:   gvcode.Position{Runes: ctx.Position.Runes},
-					},
+					// EditRange can be omitted to let the completion engine determine it.
+					// EditRange: gvcode.EditRange{
+					// 	Start: gvcode.Position{Runes: ctx.Position.Runes - utf8.RuneCountInString(prefix)},
+					// 	End:   gvcode.Position{Runes: ctx.Position.Runes},
+					// },
 				},
 				Description: kw,
 				Kind:        "text",
+				TextFormat:  "Snippet",
 			})
 		}
 	}
