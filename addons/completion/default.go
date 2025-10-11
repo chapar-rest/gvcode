@@ -182,8 +182,14 @@ func (dc *DefaultCompletion) OnConfirm(idx int) {
 	dc.Cancel()
 }
 
+// containsRange compare r1 and r2 by column to determine if r1 contains r2. This
+// works as the edit ranges for completion are always at the same line.
 func containsRange(r1, r2 gvcode.EditRange) bool {
-	return r1.Start.Runes <= r2.Start.Runes && r1.End.Runes >= r2.End.Runes
+	if r1.Start.Line != r2.Start.Line || r1.End.Line != r2.End.Line {
+		return false
+	}
+
+	return r1.Start.Column <= r2.Start.Column && r1.End.Column >= r2.End.Column
 }
 
 func isSymbolChar(ch rune) bool {
