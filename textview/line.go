@@ -30,7 +30,8 @@ func (e *TextView) FindParagraph(runeIdx int) (int, lt.Paragraph) {
 // ConvertPos convert a line/col position to rune offset.
 // line is counted by paragrah, and col is counted by rune.
 func (e *TextView) ConvertPos(line, col int) int {
-	if line < 0 {
+	e.makeValid()
+	if line < 0 || len(e.layouter.Paragraphs) == 0 {
 		return 0
 	}
 

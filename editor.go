@@ -353,6 +353,7 @@ func (e *Editor) CaretCoords() f32.Point {
 
 // ConvertPos convert a line/col position to rune offset.
 func (e *Editor) ConvertPos(line, col int) int {
+	e.initBuffer()
 	return e.text.ConvertPos(line, col)
 }
 
