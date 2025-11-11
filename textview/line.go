@@ -7,6 +7,12 @@ import (
 	lt "github.com/oligo/gvcode/internal/layout"
 )
 
+// Paragraphs returns the total number of rendered paragraphs(or logical lines).
+func (e *TextView) Paragraphs() int {
+	e.makeValid()
+	return len(e.layouter.Paragraphs)
+}
+
 // find a paragraph by rune index, returning the line number(starting from zero)
 // and the paragraph itself.
 func (e *TextView) FindParagraph(runeIdx int) (int, lt.Paragraph) {

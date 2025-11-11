@@ -357,6 +357,12 @@ func (e *Editor) ConvertPos(line, col int) int {
 	return e.text.ConvertPos(line, col)
 }
 
+// Lines returns the total number of rendered logical lines.
+func (e *Editor) Lines2() int {
+	e.initBuffer()
+	return e.text.Paragraphs()
+}
+
 // ReadUntil reads in the specified direction from the current caret position until the
 // seperator returns false. It returns the read text.
 func (e *Editor) ReadUntil(direction int, seperator func(r rune) bool) string {
