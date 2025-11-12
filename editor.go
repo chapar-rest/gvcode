@@ -358,7 +358,7 @@ func (e *Editor) ConvertPos(line, col int) int {
 }
 
 // Lines returns the total number of rendered logical lines.
-func (e *Editor) Lines2() int {
+func (e *Editor) Lines() int {
 	e.initBuffer()
 	return e.text.Paragraphs()
 }
