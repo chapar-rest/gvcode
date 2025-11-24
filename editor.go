@@ -267,7 +267,7 @@ func (e *Editor) layout(gtx layout.Context) layout.Dimensions {
 
 // PaintOverlay draws a overlay widget over the main editor area.
 func (e *Editor) PaintOverlay(gtx layout.Context, position image.Point, w layout.Widget) {
-	offset := position.Add(e.text.ScrollOff())
+	offset := position.Add(e.text.ScrollOff()).Add(image.Point{X: e.gutterWidth})
 	e.text.PaintOverlay(gtx, offset, w)
 }
 
