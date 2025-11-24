@@ -165,8 +165,8 @@ func (dc *DefaultCompletion) OnConfirm(idx int) {
 	caretStart, caretEnd := editRange.Start.Runes, editRange.End.Runes
 	// Assume line/column is set, convert the line/column position to rune offsets.
 	if caretStart <= 0 && caretEnd <= 0 {
-		caretStart = dc.Editor.ConvertPos(editRange.Start.Line, editRange.Start.Column)
-		caretEnd = dc.Editor.ConvertPos(editRange.End.Line, editRange.End.Column)
+		caretStart, _ = dc.Editor.ConvertPos(editRange.Start.Line, editRange.Start.Column)
+		caretEnd, _ = dc.Editor.ConvertPos(editRange.End.Line, editRange.End.Column)
 	}
 	// set the selection using range provided by the completor.
 	dc.Editor.SetCaret(caretStart, caretEnd)

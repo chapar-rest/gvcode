@@ -351,10 +351,13 @@ func (e *Editor) CaretCoords() f32.Point {
 	return e.text.CaretCoords()
 }
 
-// ConvertPos convert a line/col position to rune offset.
-func (e *Editor) ConvertPos(line, col int) int {
+// ConvertPos convert a line/col position to rune offset and its pixel position relative to
+// the editor itself.
+func (e *Editor) ConvertPos(line, col int) (runeOff int, pos f32.Point) {
 	e.initBuffer()
-	return e.text.ConvertPos(line, col)
+	runeOff = e.text.ConvertPos(line, col)
+	pos = e.text.RuneCoords(runeOff)
+	return
 }
 
 // Lines returns the total number of rendered logical lines.

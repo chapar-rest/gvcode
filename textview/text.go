@@ -352,7 +352,13 @@ func (e *TextView) CaretPos() (line, col int) {
 // CaretCoords returns the coordinates of the caret, relative to the
 // editor itself.
 func (e *TextView) CaretCoords() f32.Point {
-	pos := e.closestToRune(e.caret.start)
+	return e.RuneCoords(e.caret.start)
+}
+
+// RuneCoords returns the coordinates of the rune at runeIdx, relative to the
+// editor itself.
+func (e *TextView) RuneCoords(runeIdx int) f32.Point {
+	pos := e.closestToRune(runeIdx)
 	return f32.Pt(float32(pos.X)/64-float32(e.scrollOff.X), float32(pos.Y-e.scrollOff.Y))
 }
 
