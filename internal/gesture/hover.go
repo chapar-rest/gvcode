@@ -22,7 +22,7 @@ const (
 // for some time over the area.
 type Hover struct {
 	entered    bool
-	enteredAt  time.Duration
+	enteredAt  time.Time
 	startPos   f32.Point
 	isHovering bool
 	pid        pointer.ID
@@ -72,7 +72,7 @@ func (h *Hover) Update(gtx layout.Context) (HoverEvent, bool) {
 		case pointer.Leave, pointer.Cancel:
 			if h.entered && h.pid == e.PointerID {
 				h.entered = false
-				h.enteredAt = 0
+				//h.enteredAt = 0
 				h.isHovering = false
 				h.startPos = f32.Point{}
 			}
@@ -82,7 +82,7 @@ func (h *Hover) Update(gtx layout.Context) (HoverEvent, bool) {
 			}
 			if h.pid == e.PointerID {
 				h.entered = true
-				h.enteredAt = e.Time
+				h.enteredAt = gtx.Now
 				h.isHovering = false
 				h.startPos = e.Position
 			}
@@ -102,7 +102,7 @@ func (h *Hover) Update(gtx layout.Context) (HoverEvent, bool) {
 					h.isHovering = false
 					// Reset timer and start position so hover can re-trigger
 					// if the pointer becomes still again from this new position.
-					h.enteredAt = e.Time
+					h.enteredAt = gtx.Now
 					h.startPos = e.Position
 					hoverEvent = HoverEvent{Kind: KindCancelled}
 				}
@@ -113,19 +113,8 @@ func (h *Hover) Update(gtx layout.Context) (HoverEvent, bool) {
 			}
 
 			if moved {
-				h.enteredAt = e.Time
+				h.enteredAt = gtx.Now
 				h.startPos = e.Position
-				break
-			}
-
-			// If still within slop, check duration for hover activation
-			if e.Time-h.enteredAt > hoverDuration {
-				h.isHovering = true
-				// Re-anchor startPos to the current position upon activation. Future slop
-				// checks for an active hover are relative to this activation point.
-				h.startPos = e.Position
-				hoverEvent = HoverEvent{Kind: KindHovered, Position: e.Position.Round()}
-				return hoverEvent, true
 			}
 		case pointer.Press, pointer.Scroll:
 			if !h.entered || h.pid != e.PointerID {
@@ -136,11 +125,32 @@ func (h *Hover) Update(gtx layout.Context) (HoverEvent, bool) {
 				h.isHovering = false
 				// Reset timer and start position so hover can re-trigger
 				// if the pointer becomes still again from this new position.
-				h.enteredAt = e.Time
+				h.enteredAt = gtx.Now
 				h.startPos = e.Position
 				hoverEvent = HoverEvent{Kind: KindCancelled}
 			}
 
+		}
+	}
+
+	// Check for time-based activation
+	// This runs every frame, even if no events were pulled from the queue above.
+	if h.entered && !h.isHovering {
+		elapsed := gtx.Now.Sub(h.enteredAt)
+
+		if elapsed >= hoverDuration {
+			// Time is up! Trigger the hover
+			h.isHovering = true
+			// We use startPos because that's where the hover "started" accumulating
+			hoverEvent = HoverEvent{Kind: KindHovered, Position: h.startPos.Round()}
+			// Re-anchor to prevent immediate drift cancellation
+			h.enteredAt = gtx.Now
+		} else {
+			// Not enough time passed yet.
+			// Schedule a specific wake-up call for exactly when the timer expires.
+			remaining := hoverDuration - elapsed
+			wakeupTime := gtx.Now.Add(remaining)
+			gtx.Execute(op.InvalidateCmd{At: wakeupTime})
 		}
 	}
 
