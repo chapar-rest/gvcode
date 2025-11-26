@@ -1,7 +1,6 @@
 package buffer
 
 import (
-	"errors"
 	"io"
 )
 
@@ -37,12 +36,7 @@ func (pt *PieceTable) ReadRuneAt(runeOff int) (rune, error) {
 		return 0, io.EOF
 	}
 
-	runes := pt.getBuf(n.source).getTextByRuneRange(n.offset+off, 1)
-	if len(runes) == 1 {
-		return runes[0], nil
-	}
-
-	return 0, errors.New("read rune error")
+	return pt.getBuf(n.source).getRuneAt(n.offset + off)
 }
 
 // findPiece finds the starting piece of text that has runeOff in the range.
