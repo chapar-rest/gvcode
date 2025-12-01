@@ -19,7 +19,7 @@ func (pt *PieceTable) RuneOffset(runeOff int) int {
 		return pt.seqBytes
 	}
 
-	n, off, byteOff := pt.findPiece(runeOff)
+	n, off, byteOff := pt.pieces.FindPiece(runeOff)
 	if n == nil {
 		return pt.seqBytes
 	}
@@ -31,37 +31,12 @@ func (pt *PieceTable) ReadRuneAt(runeOff int) (rune, error) {
 	pt.mu.RLock()
 	defer pt.mu.RUnlock()
 
-	n, off, _ := pt.findPiece(runeOff)
+	n, off, _ := pt.pieces.FindPiece(runeOff)
 	if n == nil {
 		return 0, io.EOF
 	}
 
 	return pt.getBuf(n.source).getRuneAt(n.offset + off)
-}
-
-// findPiece finds the starting piece of text that has runeOff in the range.
-// It returns the found piece pointer, the rune offset relative to the start
-// of the piece, and the bytes offset of the piece in the text sequence.
-func (pt *PieceTable) findPiece(runeOff int) (_ *piece, offset int, bytes int) {
-	if runeOff >= pt.seqLength {
-		return nil, 0, 0
-	}
-
-	var runes int
-	var n = pt.pieces.Head()
-	for {
-		if n == pt.pieces.tail {
-			return nil, 0, bytes
-		}
-
-		if runes+n.length > runeOff {
-			return n, runeOff - runes, bytes
-		}
-
-		runes += n.length
-		bytes += n.byteLength
-		n = n.next
-	}
 }
 
 func (r *PieceTable) parseLine(text []byte) []lineInfo {

@@ -4,7 +4,7 @@ import "testing"
 
 func TestBoundaryPieceRangeSwap(t *testing.T) {
 	list := newPieceList()
-	old, _ := list.FindPiece(0)
+	old, _, _ := list.FindPiece(0)
 	//t.Errorf("old: %p, prev: %p", old, old.prev)
 
 	rng := &pieceRange{}

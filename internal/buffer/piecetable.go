@@ -156,6 +156,7 @@ func (pt *PieceTable) push2UndoStack(rng, newRng *pieceRange) {
 	pt.undoStack.push(rng)
 	// swap link the new piece into the sequence
 	rng.Swap(newRng)
+	pt.pieces.invalidateCache()
 }
 
 // insert insert text at the logical position specifed by runeIndex. runeIndex is measured by rune.
@@ -175,7 +176,7 @@ func (pt *PieceTable) insert(runeIndex int, text string) bool {
 		return true
 	}
 
-	oldPiece, inRuneOff := pt.pieces.FindPiece(runeIndex)
+	oldPiece, inRuneOff, _ := pt.pieces.FindPiece(runeIndex)
 
 	if inRuneOff == 0 {
 		pt.insertAtBoundary(runeIndex, text, oldPiece)
@@ -315,6 +316,7 @@ func (pt *PieceTable) undoRedo(src *pieceRangeStack, dest *pieceRangeStack) ([]C
 		pt.seqLength += newRuneLen - lastRuneLen
 		pt.seqBytes += newBytes - lastBytes
 		pt.changed = true
+		pt.pieces.invalidateCache()
 		return rng.cursor
 	}
 
@@ -360,7 +362,7 @@ func (pt *PieceTable) erase(startOff, endOff int) bool {
 		pt.recordAction(actionErase, startOff)
 	}()
 
-	startPiece, inRuneOff := pt.pieces.FindPiece(startOff)
+	startPiece, inRuneOff, _ := pt.pieces.FindPiece(startOff)
 
 	oldPieces := &pieceRange{
 		cursor: cursor,
@@ -585,24 +587,27 @@ func (pt *PieceTable) ReadAt(p []byte, offset int64) (total int, err error) {
 		return 0, io.EOF
 	}
 
+	first, bytesOffInPiece := pt.pieces.FindPieceByBytes(int(offset))
+	if first == pt.pieces.tail {
+		return 0, io.EOF
+	}
+
 	var expected = len(p)
-	var bytes int64
-	for n := pt.pieces.Head(); n != pt.pieces.tail; n = n.next {
-		bytes += int64(n.byteLength)
+	var bytesOff = bytesOffInPiece
 
-		if bytes > offset {
-			fragment := pt.getBuf(n.source).getTextByRange(
-				n.byteOff+n.byteLength-int(bytes-offset), // calculate the offset in the source buffer.
-				int(bytes-offset))
+	for n := first; n != pt.pieces.tail; n = n.next {
+		readSize := min(n.byteLength-bytesOff, expected-total)
+		fragment := pt.getBuf(n.source).getTextByRange(
+			n.byteOff+bytesOff, // calculate the offset in the source buffer.
+			readSize)
 
-			n := copy(p, fragment)
-			p = p[n:]
-			total += n
-			offset += int64(n)
+		copied := copy(p, fragment)
+		p = p[copied:]
+		total += copied
+		bytesOff = 0 // reset for pieces other than the first one.
 
-			if total >= expected {
-				break
-			}
+		if total >= expected {
+			break
 		}
 
 	}
@@ -618,7 +623,7 @@ func (pt *PieceTable) CreateMarker(runeOff int, bais MarkerBias) (*Marker, error
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 
-	p, inRuneOff := pt.pieces.FindPiece(runeOff)
+	p, inRuneOff, _ := pt.pieces.FindPiece(runeOff)
 	if p == pt.pieces.tail {
 		p = pt.pieces.Tail()
 		inRuneOff = p.length

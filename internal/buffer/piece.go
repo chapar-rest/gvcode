@@ -18,13 +18,24 @@ type piece struct {
 	source bufSrc
 }
 
+type pieceCache struct {
+	// last piece used.
+	lastPiece *piece
+	// rune offset of cached piece in the document.
+	startRunes int
+	// bytes offset of cached piece in the document.
+	startBytes int
+	rev        int
+}
+
 // Use sentinel nodes to be used as head and tail, as pointed out in https://www.catch22.net/tuts/neatpad/piece-chains/.
 type pieceList struct {
 	head, tail *piece
-	// cached piece for rapid offset query.
-	lastPiece *piece
-	// offset in the sequence of the last piece.
-	lastPieceOff int
+	// piece cache for rapid offset query.
+	cache pieceCache
+	// rev tracks the revision of the overall piece list. Everytime some pieces in the list
+	// are mutated, splitted, removed, added, rev should be increased.
+	rev int
 }
 
 // CursorPos keep track of the previous cursor position of undo/redo.
@@ -88,29 +99,82 @@ func (pl *pieceList) Append(newPiece *piece) {
 	pl.InsertBefore(pl.tail, newPiece)
 }
 
-// findPiece finds a piece by a runeIndex in the sequence/document, returning
-// the found piece and it rune offset in the found piece. If the runeIndex reaches
-// the end of the piece chain, the sentinal tail piece is returned.
-func (pl *pieceList) FindPiece(runeIndex int) (p *piece, offset int) {
+// FindPiece finds a piece by a runeIndex in the sequence/document, returning
+// the found piece, it rune offset in the found piece, and the bytes offset
+// of the piece in the text sequence. If the runeIndex reaches the end of the
+// piece chain, the sentinal tail piece is returned.
+func (pl *pieceList) FindPiece(runeIndex int) (p *piece, offset int, bytesOff int) {
 	if runeIndex <= 0 {
-		return pl.head.next, 0
+		return pl.head.next, 0, 0
 	}
 
-	pieceOff := 0
-	for n := pl.head.next; n != nil; n = n.next {
-		pieceOff += n.length
-		if pieceOff > runeIndex {
-			p = n
-			break
+	// Try the piece cache first
+	if pl.cache.lastPiece != nil && pl.rev == pl.cache.rev {
+		if runeIndex >= pl.cache.startRunes && runeIndex < pl.cache.startRunes+pl.cache.lastPiece.length {
+			return pl.cache.lastPiece, runeIndex - pl.cache.startRunes, pl.cache.startBytes
 		}
 	}
 
-	if p == nil {
-		p = pl.tail
+	// Fallback to scan if the cache is invalid or missed.
+	pieceOff := 0
+	for n := pl.head.next; n != nil; n = n.next {
+		nextPos := pieceOff + n.length
+		if runeIndex < nextPos {
+			// update cache
+			pl.cache.lastPiece = n
+			pl.cache.startRunes = pieceOff
+			pl.cache.startBytes = bytesOff
+			pl.cache.rev = pl.rev
+
+			return n, runeIndex - pieceOff, bytesOff
+		}
+
+		pieceOff = nextPos
+		bytesOff += n.byteLength
 	}
 
-	offset = runeIndex - (pieceOff - p.length)
-	return
+	// reached tail sentinel
+	return pl.tail, 0, bytesOff
+}
+
+// FindPieceByBytes finds a piece by a byteIndex in the sequence/document, returning
+// the found piece, it byte offset in the found piece. If the runeIndex reaches the
+// end of the piece chain, the sentinal tail piece is returned.
+func (pl *pieceList) FindPieceByBytes(byteIndex int) (*piece, int) {
+	if byteIndex <= 0 {
+		return pl.head.next, 0
+	}
+
+	if pl.cache.lastPiece != nil && pl.rev == pl.cache.rev {
+		if byteIndex >= pl.cache.startBytes && byteIndex < pl.cache.startBytes+pl.cache.lastPiece.byteLength {
+			return pl.cache.lastPiece, byteIndex - pl.cache.startBytes
+		}
+	}
+
+	// Fallback  to scan if the cache is invalid or missed.
+	bytesOff := 0
+	runesOff := 0
+	for n := pl.head.next; n != nil; n = n.next {
+		nextPos := bytesOff + n.byteLength
+		if byteIndex < nextPos {
+			// update cache
+			pl.cache.lastPiece = n
+			pl.cache.startRunes = runesOff
+			pl.cache.startBytes = bytesOff
+			pl.cache.rev = pl.rev
+
+			return n, byteIndex - bytesOff
+		}
+
+		bytesOff = nextPos
+		runesOff += n.length
+	}
+
+	return pl.tail, 0
+}
+
+func (pl *pieceList) invalidateCache() {
+	pl.rev++
 }
 
 // Remove a piece from the chain.
