@@ -114,7 +114,7 @@ type Paragraph struct {
 
 // Add add a visual line to the paragraph, returning a boolean value indicating
 // the end of a paragraph.
-func (p *Paragraph) Add(li *Line) bool {
+func (p *Paragraph) Add(li Line) bool {
 	lastGlyph := li.Glyphs[len(li.Glyphs)-1]
 
 	if p.Runes == 0 {

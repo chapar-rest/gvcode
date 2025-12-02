@@ -219,12 +219,12 @@ func (w *lineWrapper) setup(nextGlyph func() (text.Glyph, bool), paragraph []run
 
 // WrapParagraph wraps a paragraph of text using a policy similar to the WhenNecessary LineBreakPolicy from gotext/typesetting.
 // It is also the default policy used by Gio.
-func (w *lineWrapper) WrapParagraph(glyphsIter iter.Seq[text.Glyph], paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) []*Line {
+func (w *lineWrapper) WrapParagraph(glyphsIter iter.Seq[text.Glyph], paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) []Line {
 	nextGlyph, stop := iter.Pull(glyphsIter)
 	defer stop()
 	w.setup(nextGlyph, paragraph, maxWidth, tabWidth, spaceGlyph)
 
-	lines := make([]*Line, 0)
+	lines := make([]Line, 0)
 
 	for {
 		l := w.wrapNextLine(paragraph)
@@ -232,7 +232,7 @@ func (w *lineWrapper) WrapParagraph(glyphsIter iter.Seq[text.Glyph], paragraph [
 			break
 		}
 
-		lines = append(lines, &l)
+		lines = append(lines, l)
 		w.currentLine = Line{}
 	}
 

@@ -16,7 +16,7 @@ import (
 )
 
 func TestLineSplit(t *testing.T) {
-	layoutText := func(doc string) *lt.Line {
+	layoutText := func(doc string) lt.Line {
 		gtx := layout.Context{Constraints: layout.Constraints{Max: image.Point{X: 1e6, Y: 1e6}}}
 
 		buf := buffer.NewTextSource()

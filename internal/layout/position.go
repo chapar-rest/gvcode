@@ -44,7 +44,7 @@ func (c CombinedPos) String() string {
 // makeRegion creates a text-aligned rectangle from start to end. The vertical
 // dimensions of the rectangle are derived from the provided line's ascent and
 // descent, and the y offset of the line's baseline is provided as y.
-func makeRegion(line *Line, y int, start, end fixed.Int26_6) Region {
+func makeRegion(line Line, y int, start, end fixed.Int26_6) Region {
 	if start > end {
 		start, end = end, start
 	}

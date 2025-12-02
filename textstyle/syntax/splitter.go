@@ -20,7 +20,7 @@ type lineSplitter struct {
 	stopFunc  func()
 }
 
-func (rb *lineSplitter) setup(line *layout.Line) {
+func (rb *lineSplitter) setup(line layout.Line) {
 	lineIter := line.All()
 	rb.nextGlyph, rb.stopFunc = iter.Pull(lineIter)
 	rb.current = painter.RenderRun{}
@@ -36,7 +36,7 @@ func (rb *lineSplitter) commitLast(runs *[]painter.RenderRun) {
 	}
 }
 
-func (rb *lineSplitter) Split(line *layout.Line, textTokens *TextTokens, runs *[]painter.RenderRun) {
+func (rb *lineSplitter) Split(line layout.Line, textTokens *TextTokens, runs *[]painter.RenderRun) {
 	*runs = (*runs)[:0]
 	rb.runeOff = line.RuneOff
 

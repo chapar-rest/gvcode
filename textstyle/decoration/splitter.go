@@ -44,7 +44,7 @@ func (rb *decorationLineSplitter) commitLast(runs *[]painter.RenderRun) {
 // is only interested in the styling fields. We may ommit the glyphs in the
 // future to save memory if the various metrics the painter needed are stored
 // in the RenderRun.
-func (rb *decorationLineSplitter) Split(line *layout.Line, decorations *DecorationTree, runs *[]painter.RenderRun) {
+func (rb *decorationLineSplitter) Split(line layout.Line, decorations *DecorationTree, runs *[]painter.RenderRun) {
 	*runs = (*runs)[:0]
 	rb.runeOff = line.RuneOff
 	rb.current = painter.RenderRun{}
@@ -96,7 +96,7 @@ func (rb *decorationLineSplitter) Split(line *layout.Line, decorations *Decorati
 
 }
 
-func (rb *decorationLineSplitter) readToRun(line *layout.Line, start, end int) error {
+func (rb *decorationLineSplitter) readToRun(line layout.Line, start, end int) error {
 	if rb.runeOff > start {
 		// start reading from the begining.
 		rb.runeOff = line.RuneOff
@@ -127,7 +127,7 @@ func (rb *decorationLineSplitter) readToRun(line *layout.Line, start, end int) e
 	return nil
 }
 
-func (rb *decorationLineSplitter) readGlyph(line *layout.Line) (*text.Glyph, error) {
+func (rb *decorationLineSplitter) readGlyph(line layout.Line) (*text.Glyph, error) {
 	if rb.glyphOff < len(line.Glyphs) {
 		gl := line.Glyphs[rb.glyphOff]
 		if gl == nil {

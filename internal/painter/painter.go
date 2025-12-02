@@ -36,7 +36,7 @@ func (tp *TextPainter) SetViewport(viewport image.Rectangle, scrollOff image.Poi
 }
 
 // Paint paints text and various styles originated from syntax hignlighting or decorations.
-func (tp *TextPainter) Paint(gtx layout.Context, shaper *text.Shaper, lines []*lt.Line, defaultColor op.CallOp,
+func (tp *TextPainter) Paint(gtx layout.Context, shaper *text.Shaper, lines []lt.Line, defaultColor op.CallOp,
 	syntaxTokens LineSplitter, decorations LineSplitter) {
 	m := op.Record(gtx.Ops)
 	viewport := tp.viewport
@@ -72,7 +72,7 @@ func (tp *TextPainter) Paint(gtx layout.Context, shaper *text.Shaper, lines []*l
 	call.Add(gtx.Ops)
 }
 
-func (tp *TextPainter) paintText(gtx layout.Context, shaper *text.Shaper, lineOff f32.Point, line *lt.Line,
+func (tp *TextPainter) paintText(gtx layout.Context, shaper *text.Shaper, lineOff f32.Point, line lt.Line,
 	defaultMaterial op.CallOp, syntaxTokens LineSplitter) {
 	// split the line into runs.
 	if !isNil(syntaxTokens) {
@@ -88,7 +88,7 @@ func (tp *TextPainter) paintText(gtx layout.Context, shaper *text.Shaper, lineOf
 	tp.paintLine(gtx, shaper, lineOff, tp.runBuffer, defaultMaterial, false)
 }
 
-func (tp *TextPainter) paintDecorations(gtx layout.Context, shaper *text.Shaper, lineOff f32.Point, line *lt.Line,
+func (tp *TextPainter) paintDecorations(gtx layout.Context, shaper *text.Shaper, lineOff f32.Point, line lt.Line,
 	defaultMaterial op.CallOp, decorations LineSplitter) {
 	if isNil(decorations) {
 		return

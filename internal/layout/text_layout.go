@@ -28,7 +28,7 @@ type TextLayout struct {
 	Positions []CombinedPos
 	// lines contain metadata about the size and position of each line of
 	// text on the screen.
-	Lines []*Line
+	Lines []Line
 	// Paragraphs contain size and position of each paragraph of text on the screen.
 	Paragraphs []Paragraph
 	// Graphemes tracks the indices of grapheme cluster boundaries within text source.
@@ -106,8 +106,8 @@ func (tl *TextLayout) Layout(shaper *text.Shaper, params *text.Parameters, tabWi
 			tl.layoutNextParagraph(shaper, "", true, tabWidth, wrapLine)
 		}
 
-		tl.calculateXOffsets(tl.Lines)
-		tl.calculateYOffsets(tl.Lines)
+		tl.calculateXOffsets()
+		tl.calculateYOffsets()
 
 		// build position index
 		for idx, line := range tl.Lines {
@@ -142,7 +142,7 @@ func (tl *TextLayout) layoutNextParagraph(shaper *text.Shaper, paragraph string,
 	tl.Lines = append(tl.Lines, lines...)
 }
 
-func (tl *TextLayout) wrapParagraph(glyphs glyphIter, paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) []*Line {
+func (tl *TextLayout) wrapParagraph(glyphs glyphIter, paragraph []rune, maxWidth int, tabWidth int, spaceGlyph *text.Glyph) []Line {
 	return tl.wrapper.WrapParagraph(glyphs.All(), paragraph, maxWidth, tabWidth, spaceGlyph)
 }
 
@@ -154,7 +154,7 @@ func (tl *TextLayout) fakeLayout() {
 		g := text.Glyph{Runes: 1, Flags: text.FlagClusterBreak}
 		line := Line{}
 		line.append(g)
-		tl.indexGlyphs(0, &line)
+		tl.indexGlyphs(0, line)
 	}
 
 	var graphemeReader graphemeReader
@@ -168,28 +168,28 @@ func (tl *TextLayout) fakeLayout() {
 	}
 }
 
-func (tl *TextLayout) calculateYOffsets(lines []*Line) {
-	if len(lines) <= 0 {
+func (tl *TextLayout) calculateYOffsets() {
+	if len(tl.Lines) <= 0 {
 		return
 	}
 
 	lineHeight := tl.calcLineHeight(&tl.params)
 	// Ceil the first value to ensure that we don't baseline it too close to the top of the
 	// viewport and cut off the top pixel.
-	currentY := lines[0].Ascent.Ceil()
-	for i := range lines {
+	currentY := tl.Lines[0].Ascent.Ceil()
+	for i := range tl.Lines {
 		if i > 0 {
 			currentY += lineHeight.Round()
 		}
-		lines[i].adjustYOff(currentY)
+		tl.Lines[i].adjustYOff(currentY)
 	}
 }
 
-func (tl *TextLayout) calculateXOffsets(lines []*Line) {
+func (tl *TextLayout) calculateXOffsets() {
 	runeOff := 0
-	for _, line := range lines {
+	for i, line := range tl.Lines {
 		alignOff := tl.params.Alignment.Align(tl.params.Locale.Direction, line.Width, tl.params.MaxWidth)
-		line.recompute(alignOff, runeOff)
+		tl.Lines[i].recompute(alignOff, runeOff)
 		runeOff += line.Runes
 	}
 }
@@ -224,7 +224,7 @@ func (tl *TextLayout) indexGraphemeClusters(paragraph []rune, runeOffset int) {
 
 }
 
-func (tl *TextLayout) updateBounds(line *Line) {
+func (tl *TextLayout) updateBounds(line Line) {
 	logicalBounds := line.bounds()
 	if tl.bounds == (image.Rectangle{}) {
 		tl.baseline = int(line.YOff)
@@ -237,7 +237,7 @@ func (tl *TextLayout) updateBounds(line *Line) {
 	}
 }
 
-func (tl *TextLayout) trackLines(lines []*Line) {
+func (tl *TextLayout) trackLines(lines []Line) {
 	if len(lines) <= 0 {
 		tl.Paragraphs = append(tl.Paragraphs, Paragraph{})
 		return
@@ -273,7 +273,7 @@ func (tl *TextLayout) insertPosition(pos CombinedPos) {
 }
 
 // Glyph indexes the provided glyph, generating text cursor positions for it.
-func (tl *TextLayout) indexGlyphs(idx int, line *Line) {
+func (tl *TextLayout) indexGlyphs(idx int, line Line) {
 	pos := CombinedPos{}
 	pos.Runes = line.RuneOff
 	pos.LineCol.Line = idx

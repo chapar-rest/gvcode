@@ -90,5 +90,5 @@ func (s *RenderRun) Size() int {
 // RenderRuns.
 type LineSplitter interface {
 	// Split the line into runs and put the result in the runs array.
-	Split(line *lt.Line, runs *[]RenderRun)
+	Split(line lt.Line, runs *[]RenderRun)
 }

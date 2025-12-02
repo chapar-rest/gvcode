@@ -319,6 +319,6 @@ func (d *DecorationTree) Refresh() {
 }
 
 // Split implements painter.LineSplitter
-func (t *DecorationTree) Split(line *layout.Line, runs *[]painter.RenderRun) {
+func (t *DecorationTree) Split(line layout.Line, runs *[]painter.RenderRun) {
 	t.lineSplitter.Split(line, t, runs)
 }

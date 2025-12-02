@@ -92,6 +92,6 @@ func (t *TextTokens) QueryRange(start, end int) []TokenStyle {
 }
 
 // Split implements painter.LineSplitter
-func (t *TextTokens) Split(line *layout.Line, runs *[]painter.RenderRun) {
+func (t *TextTokens) Split(line layout.Line, runs *[]painter.RenderRun) {
 	t.splitter.Split(line, t, runs)
 }
