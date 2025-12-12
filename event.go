@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"gioui.org/gesture"
@@ -374,14 +375,38 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 	counterpart, isOpening := e.text.BracketsQuotes.GetCounterpart(r)
 
 	if counterpart > 0 && isOpening {
-		// auto-insert the closing part.
-		e.replace(ke.Range.Start, ke.Range.End, ke.Text+string(counterpart))
-		e.text.MoveCaret(-1, -1)
-		start, _ := e.text.Selection() // start and end should be the same
-		e.autoInsertions[start] = counterpart
+		// Assume we will auto-insert by default.
+		shouldAutoInsert := true
+
+		if counterpart != r {
+			// only check the next char.
+			if e.isNearWordChar(ke.Range.Start, false) {
+				shouldAutoInsert = false
+			}
+		} else {
+			// check both the previous and next char.
+			if e.isNearWordChar(ke.Range.Start, true) || e.isNearWordChar(ke.Range.Start, false) {
+				shouldAutoInsert = false
+			}
+		}
+
+		replaced := ke.Text
+		if shouldAutoInsert {
+			replaced += string(counterpart)
+		}
+
+		e.replace(ke.Range.Start, ke.Range.End, replaced)
+		if shouldAutoInsert {
+			e.text.MoveCaret(-1, -1)
+			start, _ := e.text.Selection() // start and end should be the same
+			e.autoInsertions[start] = counterpart
+		} else {
+			// If only the opening char was inserted, ensure it's not tracked
+			delete(e.autoInsertions, ke.Range.Start)
+		}
 
 	} else if counterpart > 0 {
-		// The input character is a bracket a quote, but it is a closing part.
+		// The input character is a bracket or a quote, but it is a closing part.
 		//
 		// check if we can just move the cursor to the next position
 		// if the input is a just inserted closing part.
@@ -409,6 +434,21 @@ func (e *Editor) onTextInput(ke key.EditEvent) {
 	// a tabstop.
 	finalStart, finalEnd := e.Selection()
 	e.snippetCtx.OnInsertAt(finalStart, finalEnd)
+
+}
+
+func (e *Editor) isNearWordChar(runeOff int, backward bool) bool {
+	pos := runeOff
+	if backward {
+		pos = runeOff - 1
+	}
+
+	nearbyChar, err := e.text.ReadRuneAt(pos)
+	if err == nil {
+		return unicode.IsLetter(nearbyChar) || unicode.IsDigit(nearbyChar) || nearbyChar == '_'
+	}
+
+	return false
 
 }
 
